@@ -1,17 +1,29 @@
-import { useState } from 'react';
-import { searchClaims, ClaimItem } from '../api/client';
+import { useState, useEffect } from 'react';
+import { searchClaims, getClaims, ClaimItem } from '../api/client';
 import Badge from '../components/shared/Badge';
 import ScoreBar from '../components/shared/ScoreBar';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
 
 export default function ClaimsPage() {
   const [query, setQuery] = useState('');
+  const [allClaims, setAllClaims] = useState<ClaimItem[]>([]);
   const [results, setResults] = useState<ClaimItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searched, setSearched] = useState(false);
 
+  useEffect(() => {
+    getClaims(50)
+      .then(data => { setAllClaims(data); setResults(data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   async function handleSearch() {
-    if (!query.trim()) return;
+    if (!query.trim()) {
+      setResults(allClaims);
+      setSearched(false);
+      return;
+    }
     setLoading(true);
     setSearched(true);
     try {
@@ -60,9 +72,9 @@ export default function ClaimsPage() {
 
       {loading && <LoadingSpinner />}
 
-      {!loading && searched && results.length === 0 && (
+      {!loading && results.length === 0 && (
         <div className="card text-center py-12">
-          <p className="text-gray-500">No claims found for "{query}"</p>
+          <p className="text-gray-500">{searched ? `No claims found for "${query}"` : 'No claims in the database yet'}</p>
           <p className="text-xs text-gray-600 mt-1">Claims are extracted from conversations with semantic analysis enabled</p>
         </div>
       )}

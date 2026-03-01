@@ -7,11 +7,12 @@ export function handleAccount(intent: ParsedSidecarIntent, customerId: string): 
 
   switch (intent.intent) {
     case 'account_info': {
-      if (!customer) return { response: 'I couldn\'t find your account. Could you verify your customer ID?' };
+      if (!customer) return { response: 'I couldn\'t find your account. Could you verify your customer ID?', success: false };
       return {
         response: `**Account Details**\nName: ${customer.name}\nEmail: ${customer.email}\nTier: ${customer.tier.toUpperCase()}\nMember since: ${customer.joinedAt}\nTotal spent: $${customer.totalSpent.toFixed(2)}\nPreferred contact: ${customer.preferredContact}`,
         data: customer,
         observationType: 'account_lookup',
+        success: true,
       };
     }
     case 'update_profile': {
@@ -21,6 +22,7 @@ export function handleAccount(intent: ParsedSidecarIntent, customerId: string): 
         response: `I've updated your ${field} to "${value}". The change will be reflected in your account shortly.`,
         data: { field, value, customerId },
         observationType: 'profile_updated',
+        success: true,
       };
     }
     case 'reset_password': {
@@ -30,6 +32,7 @@ export function handleAccount(intent: ParsedSidecarIntent, customerId: string): 
           : 'I\'ll need to verify your identity first. Could you provide your email address?',
         data: { customerId, emailSent: !!customer },
         observationType: 'password_reset',
+        success: !!customer,
       };
     }
     default:

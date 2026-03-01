@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test:*)",
+      "Bash(node -e:*)",
+      "Bash(dir:*)",
+      "Bash(curl:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

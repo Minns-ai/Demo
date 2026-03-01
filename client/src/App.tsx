@@ -6,6 +6,7 @@ import MemoriesPage from './pages/MemoriesPage';
 import StrategiesPage from './pages/StrategiesPage';
 import GraphPage from './pages/GraphPage';
 import ClaimsPage from './pages/ClaimsPage';
+import ConversationsPage from './pages/ConversationsPage';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/strategies" element={<StrategiesPage />} />
         <Route path="/graph" element={<GraphPage />} />
         <Route path="/claims" element={<ClaimsPage />} />
+        <Route path="/conversations" element={<ConversationsPage />} />
       </Routes>
     </AppShell>
   );

@@ -1,11 +1,15 @@
 import { client } from '../minns/client.js';
 import { config } from '../config.js';
+import { MinnsError } from 'minns-sdk';
 import type { StrategyResponse, SimilarStrategyResponse, ActionSuggestionResponse } from 'minns-sdk';
 
 export async function getAgentStrategies(limit = 10): Promise<StrategyResponse[]> {
   try {
     return await client.getAgentStrategies(config.agentId, limit);
-  } catch {
+  } catch (err: unknown) {
+    if (err instanceof MinnsError) {
+      console.error(`[minns:strategy] getAgentStrategies failed: ${err.message} [${err.statusCode}]`, err.details);
+    }
     return [];
   }
 }
@@ -18,7 +22,10 @@ export async function getSimilarStrategies(goalIds?: (number | string)[], toolNa
       agent_id: config.agentId,
       limit: 5,
     });
-  } catch {
+  } catch (err: unknown) {
+    if (err instanceof MinnsError) {
+      console.error(`[minns:strategy] getSimilarStrategies failed: ${err.message} [${err.statusCode}]`, err.details);
+    }
     return [];
   }
 }
@@ -26,7 +33,10 @@ export async function getSimilarStrategies(goalIds?: (number | string)[], toolNa
 export async function getActionSuggestions(contextHash: number | string, limit = 5): Promise<ActionSuggestionResponse[]> {
   try {
     return await client.getActionSuggestions(contextHash, undefined, limit);
-  } catch {
+  } catch (err: unknown) {
+    if (err instanceof MinnsError) {
+      console.error(`[minns:strategy] getActionSuggestions failed: ${err.message} [${err.statusCode}]`, err.details);
+    }
     return [];
   }
 }

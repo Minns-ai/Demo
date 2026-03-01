@@ -1,7 +1,10 @@
 {
   "name": "minns-sdk-demo",
   "private": true,
-  "workspaces": ["server", "client"],
+  "workspaces": [
+    "server",
+    "client"
+  ],
   "scripts": {
     "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
     "dev:server": "npm run dev -w server",
@@ -11,5 +14,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "minns-sdk-demo": "file:"
   }
 }

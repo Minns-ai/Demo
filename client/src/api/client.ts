@@ -11,34 +11,175 @@ async function fetchJson<T>(url: string, opts?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// ── Chat ────────────────────────────────────────────────────────────
+// ── Chat (SSE Streaming) ────────────────────────────────────────────
 
-export interface ChatResponse {
-  reply: string;
-  intent: {
+export interface AgentStep {
+  type: 'recall' | 'think' | 'act' | 'observe' | 'reflect' | 'answer' | 'context' | 'suggest';
+  // recall
+  goal?: string;
+  memories?: number;
+  strategies?: number;
+  claims?: number;
+  // think
+  thought?: string;
+  action?: string;
+  action_input?: Record<string, unknown>;
+  decision?: string;
+  // act
+  result?: unknown;
+  // observe
+  observation?: string;
+  // reflect — goal shift
+  goalShift?: { from: string; to: string };
+  // context — semantic event sent to MINNS
+  contextType?: string;
+  text?: string;
+  // suggest — SDK action suggestions
+  suggestions?: { action: string; confidence: number; reason: string }[];
+  // answer
+  reply?: string;
+  intent?: {
     intent: string;
     slots: Record<string, string>;
     confidence?: number;
     claims_hint?: { text: string; type?: string; confidence?: number }[];
-    goal_updates?: { goal: string; progress?: number }[];
   };
-  handlerResult: { response: string; data?: unknown; observationType?: string } | null;
-  debug: {
+  debug?: {
     memoriesRecalled: MemoryItem[];
     strategiesConsulted: StrategyItem[];
     claimsFound: ClaimItem[];
-    actionSuggestions: unknown[];
     eventsEmitted: string[];
     goalDesc: string | null;
-    goalProgress: number;
   };
 }
 
-export function sendMessage(message: string, customerId?: string): Promise<ChatResponse> {
-  return fetchJson('/chat', {
+export type OnStepCallback = (step: AgentStep) => void;
+export type OnDoneCallback = () => void;
+export type OnErrorCallback = (error: string) => void;
+
+/**
+ * Try to recover a turn that was in-flight when the SSE connection dropped.
+ * Returns true if recovery succeeded (steps were replayed), false if no turn exists.
+ */
+async function tryRecoverTurn(
+  customerId: string,
+  callbacks: { onStep: OnStepCallback; onDone: OnDoneCallback },
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/chat/turn/${customerId}`);
+    if (!res.ok) return false;
+    const turn = await res.json();
+    if (turn.status === 'completed' || turn.status === 'in_flight') {
+      for (const step of turn.steps) {
+        callbacks.onStep(step as AgentStep);
+      }
+      if (turn.status === 'completed') {
+        callbacks.onDone();
+      }
+      return true;
+    }
+  } catch {
+    // Recovery failed — fall through to normal send
+  }
+  return false;
+}
+
+export async function sendMessageSSE(
+  message: string,
+  callbacks: {
+    onStep: OnStepCallback;
+    onDone: OnDoneCallback;
+    onError?: OnErrorCallback;
+  },
+  customerId?: string
+): Promise<void> {
+  const cid = customerId || 'CUST-100';
+
+  const res = await fetch(`${BASE}/chat`, {
     method: 'POST',
-    body: JSON.stringify({ message, customerId }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, customerId: cid }),
   });
+
+  if (!res.ok) {
+    callbacks.onError?.(`API error: ${res.status}`);
+    return;
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    callbacks.onError?.('No response body');
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let receivedDone = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      let currentEvent = '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ') && currentEvent) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (currentEvent === 'step') {
+              callbacks.onStep(data as AgentStep);
+            } else if (currentEvent === 'done') {
+              receivedDone = true;
+              callbacks.onDone();
+            } else if (currentEvent === 'error') {
+              callbacks.onError?.(data.error);
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+          currentEvent = '';
+        } else if (line === '') {
+          currentEvent = '';
+        }
+      }
+    }
+
+    // Process any remaining buffered data
+    if (buffer.trim()) {
+      const remaining = buffer.split('\n');
+      let currentEvent = '';
+      for (const line of remaining) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ') && currentEvent) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (currentEvent === 'step') {
+              callbacks.onStep(data as AgentStep);
+            } else if (currentEvent === 'done') {
+              receivedDone = true;
+              callbacks.onDone();
+            }
+          } catch { /* skip */ }
+          currentEvent = '';
+        }
+      }
+    }
+  } catch {
+    // SSE stream broke — try to recover the turn from the server
+    if (!receivedDone) {
+      const recovered = await tryRecoverTurn(cid, callbacks);
+      if (!recovered) {
+        callbacks.onError?.('Connection lost and could not recover turn');
+      }
+    }
+  }
 }
 
 // ── Memory ──────────────────────────────────────────────────────────
@@ -99,6 +240,10 @@ export interface ClaimItem {
   confidence?: number;
   similarity?: number;
   [key: string]: unknown;
+}
+
+export function getClaims(limit = 50): Promise<ClaimItem[]> {
+  return fetchJson(`/claims?limit=${limit}`);
 }
 
 export function searchClaims(queryText: string, topK = 10): Promise<ClaimItem[]> {
@@ -199,6 +344,71 @@ export function getHealth(): Promise<HealthData> {
 
 export function getStats(): Promise<StatsData> {
   return fetchJson('/stats');
+}
+
+// ── Telemetry ────────────────────────────────────────────────────
+
+export interface TelemetryEntry {
+  type: string;
+  method?: string;
+  path?: string;
+  duration_ms?: number;
+  statusCode?: number;
+  error?: string;
+  timestamp?: number;
+}
+
+export function getTelemetry(): Promise<TelemetryEntry[]> {
+  return fetchJson('/telemetry');
+}
+
+// ── Conversations ───────────────────────────────────────────────────
+
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ConversationSession {
+  session_id: string;
+  topic: string;
+  messages: ConversationMessage[];
+}
+
+export interface IngestRequest {
+  case_id: string;
+  sessions: ConversationSession[];
+  include_assistant_facts?: boolean;
+}
+
+export interface IngestResponse {
+  messages_processed: number;
+  transactions_found: number;
+  state_changes_found: number;
+  relationships_found: number;
+  chitchat_skipped: number;
+}
+
+export interface QueryResponse {
+  answer: string;
+  query_type: 'numeric' | 'state' | 'entity_summary' | 'preference' | 'relationship' | 'nlq';
+  memory_context: unknown;
+  related_memories: unknown[];
+  related_strategies: unknown[];
+}
+
+export function ingestConversations(req: IngestRequest): Promise<IngestResponse> {
+  return fetchJson('/conversations/ingest', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  });
+}
+
+export function queryConversations(question: string, sessionId?: string): Promise<QueryResponse> {
+  return fetchJson('/conversations/query', {
+    method: 'POST',
+    body: JSON.stringify({ question, sessionId }),
+  });
 }
 
 // ── Hooks ───────────────────────────────────────────────────────────

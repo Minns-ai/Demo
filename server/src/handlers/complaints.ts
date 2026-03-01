@@ -14,6 +14,7 @@ export function handleComplaints(intent: ParsedSidecarIntent): HandlerResult {
         response: `I'm sorry to hear about your experience. I've filed complaint **${complaintId}** regarding: "${subject}"${orderId ? ` (related to order ${orderId})` : ''}. Our team will review this within 24 hours and follow up with you.`,
         data: { complaintId, subject, orderId },
         observationType: 'complaint_filed',
+        success: true,
       };
     }
     case 'escalate': {
@@ -24,6 +25,7 @@ export function handleComplaints(intent: ParsedSidecarIntent): HandlerResult {
           : `I can escalate your issue to a senior specialist. Could you provide the complaint ID, or would you like me to create a new one?`,
         data: { complaintId, escalated: true },
         observationType: 'complaint_escalated',
+        success: !!complaintId,
       };
     }
     case 'feedback': {
@@ -33,6 +35,7 @@ export function handleComplaints(intent: ParsedSidecarIntent): HandlerResult {
         response: `Thank you for your feedback!${rating ? ` Rating: ${rating}/5.` : ''}${comment ? ` "${comment}"` : ''} We value your input and use it to improve our service.`,
         data: { rating, comment },
         observationType: 'feedback_received',
+        success: true,
       };
     }
     default:

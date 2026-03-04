@@ -12,6 +12,10 @@ import episodesRouter from './routes/episodes.js';
 import searchRouter from './routes/search.js';
 import planningRouter from './routes/planning.js';
 import conversationsRouter from './routes/conversations.js';
+import nlqRouter from './routes/nlq.js';
+import structuredMemoryRouter from './routes/structured-memory.js';
+import eventsRouter from './routes/events.js';
+import adminRouter from './routes/admin.js';
 
 const app = express();
 
@@ -29,6 +33,10 @@ app.use('/api', episodesRouter);
 app.use('/api', searchRouter);
 app.use('/api', planningRouter);
 app.use('/api', conversationsRouter);
+app.use('/api', nlqRouter);
+app.use('/api', structuredMemoryRouter);
+app.use('/api', eventsRouter);
+app.use('/api', adminRouter);
 
 const server = app.listen(config.port, () => {
   console.log(`\n  ╔══════════════════════════════════════════╗`);

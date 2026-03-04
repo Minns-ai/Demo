@@ -196,6 +196,8 @@ export interface MemoryItem {
   access_count: number;
   formed_at: number | string;
   consolidation_status: string;
+  memory_type?: string;
+  last_accessed?: number | string;
 }
 
 export function getMemories(agentId: number | string, limit = 20): Promise<MemoryItem[]> {
@@ -226,6 +228,14 @@ export interface StrategyItem {
   failure_count: number;
   confidence: number;
   applicable_domains: string[];
+  counterfactual?: string;
+  strategy_type?: string;
+  support_count?: number;
+  expected_success?: number;
+  expected_cost?: number;
+  expected_value?: number;
+  precondition?: string;
+  action_hint?: string;
 }
 
 export function getStrategies(agentId: number | string, limit = 20): Promise<StrategyItem[]> {
@@ -234,23 +244,47 @@ export function getStrategies(agentId: number | string, limit = 20): Promise<Str
 
 // ── Claims ──────────────────────────────────────────────────────────
 
+export interface ClaimEntity {
+  entity_text: string;
+  entity_type: string;
+  confidence: number;
+}
+
+export interface EvidenceSpan {
+  source_text: string;
+  start?: number;
+  end?: number;
+}
+
 export interface ClaimItem {
+  claim_id?: string | number;
   claim_text?: string;
   text?: string;
+  claim_type?: string;
+  subject_entity?: string;
+  status?: string;
   confidence?: number;
   similarity?: number;
+  support_count?: number;
+  evidence_spans?: EvidenceSpan[];
+  entities?: ClaimEntity[];
+  created_at?: string | number;
+  temporal_weight?: number;
+  superseded_by?: string | number;
   [key: string]: unknown;
 }
 
-export function getClaims(limit = 50): Promise<ClaimItem[]> {
-  return fetchJson(`/claims?limit=${limit}`);
+export async function getClaims(limit = 50): Promise<ClaimItem[]> {
+  const data = await fetchJson<ClaimItem[] | Record<string, unknown>>(`/claims?limit=${limit}`);
+  return Array.isArray(data) ? data : [];
 }
 
-export function searchClaims(queryText: string, topK = 10): Promise<ClaimItem[]> {
-  return fetchJson('/claims/search', {
+export async function searchClaims(queryText: string, topK = 10): Promise<ClaimItem[]> {
+  const data = await fetchJson<ClaimItem[] | Record<string, unknown>>('/claims/search', {
     method: 'POST',
     body: JSON.stringify({ query_text: queryText, top_k: topK }),
   });
+  return Array.isArray(data) ? data : [];
 }
 
 // ── Analytics ───────────────────────────────────────────────────────
@@ -346,6 +380,17 @@ export function getStats(): Promise<StatsData> {
   return fetchJson('/stats');
 }
 
+// ── Config Status ────────────────────────────────────────────────
+
+export interface ConfigStatus {
+  minns_configured: boolean;
+  openai_configured: boolean;
+}
+
+export function getConfigStatus(): Promise<ConfigStatus> {
+  return fetchJson('/config/status');
+}
+
 // ── Telemetry ────────────────────────────────────────────────────
 
 export interface TelemetryEntry {
@@ -408,6 +453,152 @@ export function queryConversations(question: string, sessionId?: string): Promis
   return fetchJson('/conversations/query', {
     method: 'POST',
     body: JSON.stringify({ question, sessionId }),
+  });
+}
+
+// ── NLQ ──────────────────────────────────────────────────────────────
+
+export interface NLQResponse {
+  answer: string;
+  intent: string;
+  entities_resolved: { text: string; node_id: number; node_type: string; confidence: number }[];
+  confidence: number;
+  result_count: number;
+  execution_time_ms: number;
+  query_used: string;
+  explanation: string[];
+  total_count: number;
+}
+
+export function queryNLQ(question: string, opts?: { session_id?: string }): Promise<NLQResponse> {
+  return fetchJson('/nlq', {
+    method: 'POST',
+    body: JSON.stringify({ question, ...opts }),
+  });
+}
+
+// ── Structured Memory ────────────────────────────────────────────────
+
+// SDK returns template as a discriminated union: { Ledger: {...} } | { StateMachine: {...} } | etc.
+export type StructuredMemoryTemplate =
+  | { Ledger: { entries: { amount: number; description: string; direction: string }[]; balance: number; provenance: string } }
+  | { StateMachine: { current_state: string; history: { from: string; to: string; trigger: string }[]; provenance: string } }
+  | { PreferenceList: { ranked_items: { item: string; rank: number; score: number }[]; provenance: string } }
+  | { Tree: { nodes: Record<string, string[]>; provenance: string } };
+
+export interface StructuredMemoryListResponse {
+  keys: string[];
+  count: number;
+}
+
+export interface StructuredMemoryGetResponse {
+  key: string;
+  template: StructuredMemoryTemplate;
+}
+
+export interface LedgerBalance {
+  key: string;
+  balance: number;
+}
+
+export interface StateCurrentResponse {
+  key: string;
+  current_state: string;
+}
+
+/** Extract the template type name from the discriminated union */
+export function getTemplateType(template: StructuredMemoryTemplate): string {
+  if ('Ledger' in template) return 'Ledger';
+  if ('StateMachine' in template) return 'StateMachine';
+  if ('PreferenceList' in template) return 'PreferenceList';
+  if ('Tree' in template) return 'Tree';
+  return 'Unknown';
+}
+
+/** Extract the inner data from the discriminated union */
+export function getTemplateData(template: StructuredMemoryTemplate): unknown {
+  if ('Ledger' in template) return template.Ledger;
+  if ('StateMachine' in template) return template.StateMachine;
+  if ('PreferenceList' in template) return template.PreferenceList;
+  if ('Tree' in template) return template.Tree;
+  return template;
+}
+
+export function listStructuredMemory(prefix?: string): Promise<StructuredMemoryListResponse> {
+  const qs = prefix ? `?prefix=${encodeURIComponent(prefix)}` : '';
+  return fetchJson(`/structured-memory${qs}`);
+}
+
+export function getStructuredMemory(key: string): Promise<StructuredMemoryGetResponse> {
+  return fetchJson(`/structured-memory/${encodeURIComponent(key)}`);
+}
+
+export function deleteStructuredMemory(key: string): Promise<{ success: boolean }> {
+  return fetchJson(`/structured-memory/${encodeURIComponent(key)}`, { method: 'DELETE' });
+}
+
+export function upsertStructuredMemory(key: string, template: StructuredMemoryTemplate): Promise<{ success: boolean; key: string }> {
+  return fetchJson('/structured-memory', {
+    method: 'POST',
+    body: JSON.stringify({ key, template }),
+  });
+}
+
+export function appendLedgerEntry(key: string, entry: { amount: number; description: string; direction: 'Credit' | 'Debit' }): Promise<{ success: boolean; balance: number }> {
+  return fetchJson(`/structured-memory/${encodeURIComponent(key)}/ledger`, {
+    method: 'POST',
+    body: JSON.stringify(entry),
+  });
+}
+
+export function getLedgerBalance(key: string): Promise<LedgerBalance> {
+  return fetchJson(`/structured-memory/${encodeURIComponent(key)}/ledger/balance`);
+}
+
+export function transitionState(key: string, req: { new_state: string; trigger: string }): Promise<{ success: boolean; new_state: string }> {
+  return fetchJson(`/structured-memory/${encodeURIComponent(key)}/state`, {
+    method: 'POST',
+    body: JSON.stringify(req),
+  });
+}
+
+export function getCurrentState(key: string): Promise<StateCurrentResponse> {
+  return fetchJson(`/structured-memory/${encodeURIComponent(key)}/state`);
+}
+
+export function updatePreference(key: string, req: { item: string; rank: number; score: number }): Promise<{ success: boolean }> {
+  return fetchJson(`/structured-memory/${encodeURIComponent(key)}/preference`, {
+    method: 'POST',
+    body: JSON.stringify(req),
+  });
+}
+
+export function addTreeChild(key: string, req: { parent: string; child: string }): Promise<{ success: boolean }> {
+  return fetchJson(`/structured-memory/${encodeURIComponent(key)}/tree`, {
+    method: 'POST',
+    body: JSON.stringify(req),
+  });
+}
+
+// ── Events ───────────────────────────────────────────────────────────
+
+export interface EventItem {
+  event_id: string | number;
+  event_type: string;
+  timestamp: string;
+  data: unknown;
+}
+
+export function getEvents(limit = 50): Promise<EventItem[]> {
+  return fetchJson(`/events?limit=${limit}`);
+}
+
+// ── Admin ────────────────────────────────────────────────────────────
+
+export function processEmbeddings(limit = 100): Promise<{ processed: number }> {
+  return fetchJson('/admin/embeddings', {
+    method: 'POST',
+    body: JSON.stringify({ limit }),
   });
 }
 

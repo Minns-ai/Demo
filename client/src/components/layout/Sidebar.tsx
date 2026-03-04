@@ -9,9 +9,16 @@ const nav = [
   { to: '/graph', label: 'Graph', icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1' },
   { to: '/claims', label: 'Claims', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
   { to: '/conversations', label: 'Conversations', icon: 'M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-1m0 0V6a2 2 0 012-2h8a2 2 0 012 2v5a2 2 0 01-2 2h-2l-4 4v-4H9z' },
+  { to: '/nlq', label: 'NLQ', icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+  { to: '/structured-memory', label: 'Structured Memory', icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
+  { to: '/architecture', label: 'Architecture', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  onOpenSDKRef?: () => void;
+}
+
+export default function Sidebar({ onOpenSDKRef }: SidebarProps) {
   const [healthy, setHealthy] = useState(false);
 
   useEffect(() => {
@@ -71,7 +78,21 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="py-4 w-full flex justify-center">
+      <div className="py-4 w-full flex flex-col items-center gap-3">
+        {onOpenSDKRef && (
+          <button
+            onClick={onOpenSDKRef}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-all group relative"
+            title="SDK Reference"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-surface-3 rounded-lg text-[11px] text-white font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 shadow-lg">
+              SDK Reference
+            </div>
+          </button>
+        )}
         <div className={`w-2 h-2 rounded-full ${healthy ? 'bg-emerald-400' : 'bg-gray-600'}`}
              style={healthy ? { boxShadow: '0 0 6px 2px rgba(52, 211, 153, 0.4)' } : {}}
              title={healthy ? 'MINNS SDK Connected' : 'Disconnected'} />

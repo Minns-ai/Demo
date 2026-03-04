@@ -7,6 +7,7 @@ import NLQIngestPanel from '../components/chat/NLQIngestPanel';
 import NLQResultPanel from '../components/chat/NLQResultPanel';
 import { sendMessageSSE, AgentStep, ingestConversations, queryConversations } from '../api/client';
 import type { IngestResponse, QueryResponse, ConversationMessage } from '../api/client';
+import { useTour } from '../components/layout/AppShell';
 
 type Mode = 'events' | 'nlq';
 
@@ -42,6 +43,7 @@ const starterPrompts = [
 ];
 
 export default function ChatPage() {
+  const { startTour } = useTour();
   const [mode, setMode] = useState<Mode>('events');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -310,6 +312,17 @@ export default function ChatPage() {
                     </button>
                   ))}
                 </div>
+
+                {/* Tour trigger */}
+                <button
+                  onClick={startTour}
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-600 rounded-xl text-xs font-medium transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  Explore the SDK
+                </button>
               </div>
             </div>
           )}

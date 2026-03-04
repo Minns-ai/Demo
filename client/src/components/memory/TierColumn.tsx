@@ -14,8 +14,8 @@ export default function TierColumn({ tier, memories }: { tier: 'Episodic' | 'Sem
     <div className="flex-1 min-w-[280px]">
       <div className="flex items-center gap-2 mb-3">
         <Badge variant={info.variant}>{tier}</Badge>
-        <span className="text-[11px] text-gray-500">{info.desc}</span>
-        <span className="text-[11px] text-gray-600 ml-auto">{memories.length}</span>
+        <span className="text-xs text-gray-400">{info.desc}</span>
+        <span className="text-xs text-gray-400 ml-auto">{memories.length}</span>
       </div>
       <div className="space-y-0">
         {memories.map(m => <MemoryCard key={String(m.id)} memory={m} />)}

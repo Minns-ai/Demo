@@ -100,7 +100,7 @@ export default function NLQResultPanel({ queryResponse, isLoading }: Props) {
             </div>
 
             {/* Memory Context */}
-            {queryResponse.memory_context && (
+            {queryResponse.memory_context != null && (
               <CollapsibleSection title="Memory Context">
                 <pre className="text-[10px] text-gray-500 bg-white border border-gray-100 rounded p-2 overflow-auto max-h-40 font-mono whitespace-pre-wrap">
                   {JSON.stringify(queryResponse.memory_context, null, 2)}

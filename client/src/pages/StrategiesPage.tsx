@@ -3,6 +3,7 @@ import { useApiData, getStrategies, StrategyItem } from '../api/client';
 import StrategyCard from '../components/strategy/StrategyCard';
 import PlaybookViewer from '../components/strategy/PlaybookViewer';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
+import LearnMoreBanner from '../components/shared/LearnMoreBanner';
 
 const AGENT_ID = 1001;
 
@@ -12,6 +13,20 @@ export default function StrategiesPage() {
 
   return (
     <div className="p-6">
+      <LearnMoreBanner
+        title="Learned Behavioral Playbooks from Successful Patterns"
+        description="Strategies emerge as the agent discovers and reinforces successful action sequences across contexts."
+        sdkMethods={[
+          { method: 'getAgentStrategies(agentId)', endpoint: 'GET /strategies/:agentId', description: 'Returns learned strategies with quality scores, playbooks, failure modes, and applicability domains' },
+        ]}
+        responseFields={[
+          { field: 'quality_score', type: 'number', description: 'Overall strategy quality from 0-1 based on success rate and reinforcement' },
+          { field: 'playbook', type: 'PlaybookStep[]', description: 'Ordered steps with conditions, recovery actions, and branching logic' },
+          { field: 'failure_modes', type: 'string[]', description: 'Known failure scenarios for this strategy' },
+          { field: 'counterfactual', type: 'string', description: 'What-if analysis of alternative approaches' },
+        ]}
+      />
+
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-200">Strategy System</h1>

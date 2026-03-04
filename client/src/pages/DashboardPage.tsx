@@ -1,6 +1,9 @@
-import { useApiData, getHealth, getStats } from '../api/client';
+import { useState } from 'react';
+import { useApiData, getHealth, getStats, listStructuredMemory, queryNLQ } from '../api/client';
+import type { NLQResponse, StructuredMemoryListResponse } from '../api/client';
 import Badge from '../components/shared/Badge';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
+import LearnMoreBanner from '../components/shared/LearnMoreBanner';
 
 export default function DashboardPage() {
   const { data: health, loading: hLoading } = useApiData(getHealth);
@@ -14,6 +17,21 @@ export default function DashboardPage() {
         <h1 className="text-xl font-semibold text-gray-200">Dashboard</h1>
         <p className="text-sm text-gray-500">System health, processing stats, and learning metrics</p>
       </div>
+
+      <LearnMoreBanner
+        title="Real-time MINNS Engine Overview"
+        description="System health, processing throughput, store statistics, and learning progress from the MINNS SDK."
+        sdkMethods={[
+          { method: 'getHealth()', endpoint: 'GET /health', description: 'Returns engine status, version, uptime, node/edge counts, and processing rate' },
+          { method: 'getStats()', endpoint: 'GET /stats', description: 'Returns aggregate processing stats, per-store breakdowns, and learning totals' },
+        ]}
+        responseFields={[
+          { field: 'is_healthy', type: 'boolean', description: 'Whether the engine is in a healthy state' },
+          { field: 'processing_rate', type: 'number', description: 'Events processed per second' },
+          { field: 'stores', type: 'object', description: 'Per-store stats: memories, strategies, claims, graph' },
+          { field: 'total_memories_formed', type: 'number', description: 'Cumulative memories consolidated across all agents' },
+        ]}
+      />
 
       {/* Health Status */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -73,19 +91,106 @@ export default function DashboardPage() {
 
       {/* Learning */}
       <h2 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">Learning Metrics</h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
         <StatCard label="Memories Formed" value={stats?.total_memories_formed ?? 0} />
         <StatCard label="Strategies Extracted" value={stats?.total_strategies_extracted ?? 0} />
         <StatCard label="Reinforcements" value={stats?.total_reinforcements_applied ?? 0} />
       </div>
+
+      {/* Structured Memory Stats */}
+      <StructuredMemoryStats />
+
+      {/* Quick NLQ Widget */}
+      <QuickNLQWidget />
     </div>
+  );
+}
+
+function StructuredMemoryStats() {
+  const { data: listData } = useApiData<StructuredMemoryListResponse>(() => listStructuredMemory(), []);
+  const keys = listData?.keys ?? [];
+  const total = keys.length;
+
+  const breakdown: Record<string, number> = {};
+  for (const key of keys) {
+    const prefix = key.split(':')[0] || 'other';
+    breakdown[prefix] = (breakdown[prefix] || 0) + 1;
+  }
+
+  return (
+    <>
+      <h2 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">Structured Memory</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Total Keys" value={total} />
+        {Object.entries(breakdown).slice(0, 3).map(([prefix, count]) => (
+          <StatCard key={prefix} label={prefix} value={count} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function QuickNLQWidget() {
+  const [question, setQuestion] = useState('');
+  const [result, setResult] = useState<NLQResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleAsk = async () => {
+    if (!question.trim()) return;
+    setLoading(true);
+    try {
+      const res = await queryNLQ(question);
+      setResult(res);
+    } catch {
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <h2 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">Quick NLQ</h2>
+      <div className="card">
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            placeholder="Ask a quick question..."
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAsk()}
+            className="flex-1 bg-surface-3 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-brand-500"
+          />
+          <button
+            onClick={handleAsk}
+            disabled={loading || !question.trim()}
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 rounded-lg text-sm text-white transition-colors"
+          >
+            {loading ? '...' : 'Ask'}
+          </button>
+        </div>
+        {result && (
+          <div className="bg-surface-3 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant={result.confidence >= 0.8 ? 'green' : result.confidence >= 0.5 ? 'amber' : 'red'}>
+                {(result.confidence * 100).toFixed(0)}%
+              </Badge>
+              {result.execution_time_ms != null && (
+                <span className="text-xs text-gray-400">{result.execution_time_ms.toFixed(0)}ms</span>
+              )}
+            </div>
+            <div className="text-sm text-gray-300">{result.answer}</div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
 function StatCard({ label, value, badge }: { label: string; value: string | number; badge?: 'green' | 'red' | 'amber' }) {
   return (
     <div className="card">
-      <div className="text-[11px] text-gray-500 mb-1">{label}</div>
+      <div className="text-xs text-gray-400 mb-1">{label}</div>
       <div className="flex items-center gap-2">
         <span className="text-lg font-semibold text-gray-200">{value}</span>
         {badge && <Badge variant={badge}>{badge === 'green' ? 'Healthy' : 'Degraded'}</Badge>}

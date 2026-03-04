@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useApiData, getGraph, getAnalytics } from '../api/client';
 import Badge from '../components/shared/Badge';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
+import LearnMoreBanner from '../components/shared/LearnMoreBanner';
 
 const NODE_COLORS: Record<string, string> = {
   action: '#6366f1',
@@ -139,6 +140,20 @@ export default function GraphPage() {
 
   return (
     <div className="p-6 h-full flex flex-col">
+      <LearnMoreBanner
+        title="Knowledge Graph with Analytics and Learning Metrics"
+        description="Visualize the EventGraph structure, inspect node properties, and monitor graph analytics and learning progress."
+        sdkMethods={[
+          { method: 'getGraph()', endpoint: 'GET /graph', description: 'Returns graph nodes and edges with types, labels, and properties' },
+          { method: 'getAnalytics()', endpoint: 'GET /analytics', description: 'Returns graph analytics (components, clustering, modularity) and learning metrics' },
+        ]}
+        responseFields={[
+          { field: 'nodes', type: 'GraphNode[]', description: 'Nodes with id, label, node_type, and arbitrary properties' },
+          { field: 'learning_metrics', type: 'object', description: 'Total events, unique contexts, learned patterns, success rate, edge weights' },
+          { field: 'modularity', type: 'number', description: 'Graph modularity score indicating community structure' },
+        ]}
+      />
+
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-200">Graph Visualization</h1>
@@ -146,7 +161,7 @@ export default function GraphPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {Object.entries(NODE_COLORS).filter(([k]) => k !== 'default').map(([type, color]) => (
-            <div key={type} className="flex items-center gap-1.5 text-[11px] text-gray-400">
+            <div key={type} className="flex items-center gap-1.5 text-xs text-gray-400">
               <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
               {type}
             </div>
@@ -154,15 +169,38 @@ export default function GraphPage() {
         </div>
       </div>
 
-      {/* Analytics summary */}
+      {/* Analytics: Graph Stats */}
       {analytics && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-          <MiniStat label="Nodes" value={analytics.node_count} />
-          <MiniStat label="Edges" value={analytics.edge_count} />
-          <MiniStat label="Components" value={analytics.connected_components} />
-          <MiniStat label="Communities" value={analytics.community_count} />
-          <MiniStat label="Clustering" value={analytics.clustering_coefficient.toFixed(3)} />
-        </div>
+        <>
+          <div className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">Graph Analytics</div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+            <MiniStat label="Nodes" value={analytics.node_count} />
+            <MiniStat label="Edges" value={analytics.edge_count} />
+            <MiniStat label="Components" value={analytics.connected_components} />
+            <MiniStat label="Largest Component" value={analytics.largest_component_size} />
+            <MiniStat label="Avg Path Length" value={analytics.average_path_length?.toFixed(2) ?? '-'} />
+            <MiniStat label="Diameter" value={analytics.diameter} />
+            <MiniStat label="Avg Clustering" value={analytics.average_clustering?.toFixed(3) ?? '-'} />
+            <MiniStat label="Modularity" value={analytics.modularity?.toFixed(3) ?? '-'} />
+            <MiniStat label="Communities" value={analytics.community_count} />
+            <MiniStat label="Clustering Coeff" value={analytics.clustering_coefficient.toFixed(3)} />
+          </div>
+
+          {/* Learning Metrics */}
+          {analytics.learning_metrics && (
+            <>
+              <div className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">Learning Metrics</div>
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+                <MiniStat label="Total Events" value={analytics.learning_metrics.total_events} />
+                <MiniStat label="Unique Contexts" value={analytics.learning_metrics.unique_contexts} />
+                <MiniStat label="Learned Patterns" value={analytics.learning_metrics.learned_patterns} />
+                <MiniStat label="Strong Memories" value={analytics.learning_metrics.strong_memories} />
+                <MiniStat label="Success Rate" value={`${(analytics.learning_metrics.overall_success_rate * 100).toFixed(1)}%`} />
+                <MiniStat label="Avg Edge Weight" value={analytics.learning_metrics.average_edge_weight?.toFixed(2) ?? '-'} />
+              </div>
+            </>
+          )}
+        </>
       )}
 
       <div className="flex-1 relative bg-surface-1 rounded-xl border border-surface-4 overflow-hidden">
@@ -183,7 +221,7 @@ export default function GraphPage() {
             </div>
             <p className="text-sm text-gray-200">{selected.label}</p>
             {selected.properties && Object.keys(selected.properties).length > 0 && (
-              <pre className="mt-2 text-[10px] text-gray-500 overflow-auto max-h-24">
+              <pre className="mt-2 text-xs text-gray-400 overflow-auto max-h-24">
                 {JSON.stringify(selected.properties, null, 2)}
               </pre>
             )}
@@ -197,7 +235,7 @@ export default function GraphPage() {
 function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="bg-surface-2 rounded-lg p-2 text-center">
-      <div className="text-[10px] text-gray-500">{label}</div>
+      <div className="text-xs text-gray-400">{label}</div>
       <div className="text-sm font-semibold text-gray-200">{value}</div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { findOrder } from '../data/orders.js';
 import type { ParsedSidecarIntent } from 'minns-sdk';
 import type { HandlerResult } from './order-tracking.js';
+import { emitStateChange, emitTransaction } from '../agent/typed-events.js';
 
 export function handleReturns(intent: ParsedSidecarIntent, customerId: string): HandlerResult {
   const orderId = intent.slots.order_id != null ? String(intent.slots.order_id) : undefined;
@@ -12,6 +13,11 @@ export function handleReturns(intent: ParsedSidecarIntent, customerId: string): 
       if (!order) return { response: `I couldn't find order ${orderId}. Could you check the order number?`, success: false };
       if (order.status === 'returned') return { response: `Order **${orderId}** has already been returned.`, success: false };
       const reason = intent.slots.reason != null ? String(intent.slots.reason) : 'not specified';
+
+      // Fire-and-forget: emit typed events (auto-update state machine + ledger server-side)
+      emitStateChange(`return:${orderId}`, 'initiated', 'unknown', 'customer_return_request', { customer_id: customerId, reason });
+      emitTransaction(customerId, 'TechGear', order.total, 'Debit', `Refund for return of order ${orderId}`, { customer_id: customerId });
+
       return {
         response: `I've initiated a return for order **${orderId}** (${order.items.map(i => i.name).join(', ')}). Reason: ${reason}. You'll receive a prepaid return label via email within 24 hours. Once we receive the item, your refund of **$${order.total.toFixed(2)}** will be processed within 3-5 business days.`,
         data: { orderId, total: order.total, reason, items: order.items },
@@ -20,6 +26,9 @@ export function handleReturns(intent: ParsedSidecarIntent, customerId: string): 
       };
     }
     case 'refund_status': {
+      if (orderId) {
+        emitStateChange(`return:${orderId}`, 'refunded', 'initiated', 'refund_status_check', { customer_id: customerId });
+      }
       return {
         response: orderId
           ? `Refund for order **${orderId}** is being processed. Typical processing time is 3-5 business days after we receive the returned item.`
@@ -32,6 +41,9 @@ export function handleReturns(intent: ParsedSidecarIntent, customerId: string): 
       if (!orderId) return { response: 'For an exchange, I\'ll need your order number. What is it?' };
       const order = findOrder(orderId);
       if (!order) return { response: `Order ${orderId} not found.`, success: false };
+
+      emitStateChange(`return:${orderId}`, 'exchanged', 'initiated', 'exchange_request', { customer_id: customerId });
+
       return {
         response: `I can arrange an exchange for order **${orderId}**. Would you like to exchange for a different size/color, or a completely different product?`,
         data: { orderId, currentItems: order.items },

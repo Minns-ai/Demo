@@ -1,5 +1,6 @@
 import { findOrder, getCustomerOrders } from '../data/orders.js';
 import type { ParsedSidecarIntent } from 'minns-sdk';
+import { emitStateChange } from '../agent/typed-events.js';
 
 export interface HandlerResult {
   response: string;
@@ -30,6 +31,9 @@ export function handleOrderTracking(intent: ParsedSidecarIntent, customerId: str
       }
       const order = findOrder(orderId);
       if (!order) return { response: `I couldn't find order ${orderId}. Could you double-check the order number?`, success: false };
+      // Fire-and-forget: emit typed event (auto-updates state machine server-side)
+      emitStateChange(`order:${orderId}`, order.status, 'unknown', 'order_status_lookup', { customer_id: customerId });
+
       const statusInfo = order.trackingNumber
         ? `Status: **${order.status}** | Tracking: ${order.trackingNumber} | ETA: ${order.estimatedDelivery || 'N/A'}`
         : `Status: **${order.status}**${order.estimatedDelivery ? ` | ETA: ${order.estimatedDelivery}` : ''}`;

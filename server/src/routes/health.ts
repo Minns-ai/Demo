@@ -1,8 +1,20 @@
 import { Router } from 'express';
 import { client, getTelemetryLog } from '../minns/client.js';
 import { MinnsError } from 'minns-sdk';
+import { config } from '../config.js';
 
 const router = Router();
+
+const PLACEHOLDER_KEYS = ['your_minns_api_key_here', 'your_openai_api_key_here'];
+
+router.get('/config/status', (_req, res) => {
+  const minnsKey = config.minnsApiKey;
+  const openaiKey = config.openaiApiKey;
+  res.json({
+    minns_configured: !!minnsKey && !PLACEHOLDER_KEYS.includes(minnsKey),
+    openai_configured: !!openaiKey && !PLACEHOLDER_KEYS.includes(openaiKey),
+  });
+});
 
 router.get('/health', async (_req, res) => {
   try {

@@ -156,9 +156,9 @@ export async function handleMessage(
     strategyLimit: 5,
   });
 
-  let topMemories = rankMemories(recall.memories, 5);
-  let activeStrategies = rankStrategies(recall.strategies, 3);
-  let topClaims = rankClaims(recall.claims, 5);
+  let topMemories = rankMemories(Array.isArray(recall.memories) ? recall.memories : [], 5);
+  let activeStrategies = rankStrategies(Array.isArray(recall.strategies) ? recall.strategies : [], 3);
+  let topClaims = rankClaims(Array.isArray(recall.claims) ? recall.claims : [], 5);
 
   // Fetch action suggestions — MINNS recommends next actions based on graph patterns
   const actionSuggestions = await getActionSuggestions(activeGoal ?? 'general', 3);
@@ -420,7 +420,7 @@ export async function handleMessage(
         strategyLimit: 5,
         memoryLimit: 5,
       });
-      activeStrategies = rankStrategies(freshRecall.strategies, 3);
+      activeStrategies = rankStrategies(Array.isArray(freshRecall.strategies) ? freshRecall.strategies : [], 3);
 
       // Rebuild knowledge context so the next THINK sees the right strategies
       knowledgeContext = rebuildKnowledgeContext();
@@ -632,26 +632,31 @@ async function executeAction(
         mockIntent('product_info', {
           product_id: String(params.product_id ?? ''),
           query: String(params.query ?? ''),
-        })
+        }),
+        customerId
       );
     case 'availability':
       return handleProducts(
-        mockIntent('availability', { product_id: String(params.product_id ?? '') })
+        mockIntent('availability', { product_id: String(params.product_id ?? '') }),
+        customerId
       );
     case 'recommend':
       return handleProducts(
-        mockIntent('recommend', { category: String(params.category ?? '') })
+        mockIntent('recommend', { category: String(params.category ?? '') }),
+        customerId
       );
     case 'file_complaint':
       return handleComplaints(
         mockIntent('file_complaint', {
           subject: String(params.subject ?? ''),
           order_id: String(params.order_id ?? ''),
-        })
+        }),
+        customerId
       );
     case 'escalate':
       return handleComplaints(
-        mockIntent('escalate', { complaint_id: String(params.complaint_id ?? '') })
+        mockIntent('escalate', { complaint_id: String(params.complaint_id ?? '') }),
+        customerId
       );
     case 'reset_password':
       return handleAccount(mockIntent('reset_password', {}), customerId);

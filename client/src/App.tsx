@@ -7,6 +7,9 @@ import StrategiesPage from './pages/StrategiesPage';
 import GraphPage from './pages/GraphPage';
 import ClaimsPage from './pages/ClaimsPage';
 import ConversationsPage from './pages/ConversationsPage';
+import NLQPage from './pages/NLQPage';
+import StructuredMemoryPage from './pages/StructuredMemoryPage';
+import ArchitecturePage from './pages/ArchitecturePage';
 
 export default function App() {
   return (
@@ -20,6 +23,9 @@ export default function App() {
         <Route path="/graph" element={<GraphPage />} />
         <Route path="/claims" element={<ClaimsPage />} />
         <Route path="/conversations" element={<ConversationsPage />} />
+        <Route path="/nlq" element={<NLQPage />} />
+        <Route path="/structured-memory" element={<StructuredMemoryPage />} />
+        <Route path="/architecture" element={<ArchitecturePage />} />
       </Routes>
     </AppShell>
   );

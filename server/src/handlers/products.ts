@@ -1,8 +1,9 @@
 import { findProduct, searchProducts, getProductsByCategory } from '../data/products.js';
 import type { ParsedSidecarIntent } from 'minns-sdk';
 import type { HandlerResult } from './order-tracking.js';
+import { trackProductPreference } from '../agent/structured-memory-ops.js';
 
-export function handleProducts(intent: ParsedSidecarIntent): HandlerResult {
+export function handleProducts(intent: ParsedSidecarIntent, customerId?: string): HandlerResult {
   switch (intent.intent) {
     case 'product_info': {
       const productId = intent.slots.product_id != null ? String(intent.slots.product_id) : undefined;
@@ -10,6 +11,7 @@ export function handleProducts(intent: ParsedSidecarIntent): HandlerResult {
       if (productId) {
         const product = findProduct(productId);
         if (!product) return { response: `Product ${productId} not found.`, success: false };
+        if (customerId) trackProductPreference(customerId, product.name, 1.0);
         return {
           response: `**${product.name}** ($${product.price.toFixed(2)})\n\n${product.description}\n\nRating: ${'★'.repeat(Math.round(product.rating))} (${product.rating}/5)\nAvailability: ${product.inStock ? `In stock (${product.stockCount} available)` : 'Out of stock'}`,
           data: product,
@@ -50,6 +52,12 @@ export function handleProducts(intent: ParsedSidecarIntent): HandlerResult {
       const topItems = (items.length > 0 ? items : searchProducts(''))
         .sort((a, b) => b.rating - a.rating)
         .slice(0, 3);
+      // Track product preferences for recommendations
+      if (customerId) {
+        for (const p of topItems) {
+          trackProductPreference(customerId, p.name, 0.5);
+        }
+      }
       const list = topItems.map(p => `- **${p.name}** — $${p.price.toFixed(2)} (${p.rating}★) — ${p.description.slice(0, 60)}...`).join('\n');
       return {
         response: `Here are my top recommendations${category ? ` in ${category}` : ''}:\n${list}`,

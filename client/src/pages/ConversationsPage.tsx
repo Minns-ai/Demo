@@ -7,6 +7,7 @@ import {
   type QueryResponse,
   type ConversationSession,
 } from '../api/client';
+import LearnMoreBanner from '../components/shared/LearnMoreBanner';
 
 // ── Sample Datasets ─────────────────────────────────────────────────
 
@@ -192,7 +193,22 @@ export default function ConversationsPage() {
   }
 
   return (
-    <div className="flex h-full gap-3">
+    <div className="flex flex-col h-full gap-3">
+      <LearnMoreBanner
+        light
+        title="Bulk Conversation Ingestion + NLQ Querying"
+        description="Ingest multi-session conversation data into MINNS, then query it with natural language to extract transactions, relationships, and preferences."
+        sdkMethods={[
+          { method: 'ingestConversations()', endpoint: 'POST /conversations/ingest', description: 'Ingest conversation sessions, extracting transactions, state changes, and relationships' },
+          { method: 'queryConversations()', endpoint: 'POST /conversations/query', description: 'Natural language query over ingested conversation data with typed responses' },
+        ]}
+        responseFields={[
+          { field: 'messages_processed', type: 'number', description: 'Total messages parsed during ingestion' },
+          { field: 'query_type', type: 'enum', description: 'Classified query type: numeric, state, entity_summary, preference, relationship, nlq' },
+          { field: 'memory_context', type: 'object', description: 'Relevant structured memory context used to answer the query' },
+        ]}
+      />
+      <div className="flex flex-1 gap-3 min-h-0">
       {/* ── Left Panel: Dataset & Ingestion ─────────────────────────── */}
       <div className="w-80 flex-shrink-0 bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col">
         <div className="px-4 py-3.5 border-b border-gray-100">
@@ -488,6 +504,7 @@ export default function ConversationsPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

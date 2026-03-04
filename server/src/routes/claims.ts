@@ -46,7 +46,13 @@ router.post('/claims/search', async (req, res) => {
       return;
     }
     const results = await searchClaims(query_text, top_k || 10);
-    res.json(results);
+    // SDK may return grouped response {groups: [{subject, claims}]} or flat array
+    const flat = Array.isArray(results)
+      ? results
+      : Array.isArray((results as any).groups)
+        ? (results as any).groups.flatMap((g: any) => g.claims ?? [])
+        : [];
+    res.json(flat);
   } catch (err: unknown) {
     if (err instanceof MinnsError) {
       res.status(err.statusCode ?? 500).json({ error: err.message, details: err.details });

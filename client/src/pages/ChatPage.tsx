@@ -27,10 +27,10 @@ const preloadedConversation = [
 ];
 
 const starterQueries = [
-  { text: "What do I know about Sarah's family?", subtitle: 'entity_summary' },
+  { text: "What do you know about this user?", subtitle: 'entity_summary' },
   { text: "What's the budget for the trip?", subtitle: 'numeric' },
   { text: 'Are there any dietary requirements?', subtitle: 'preference' },
-  { text: 'Where does Sarah live?', subtitle: 'state' },
+  { text: 'Where does this user live?', subtitle: 'state' },
   { text: 'What activities are planned?', subtitle: 'entity_summary' },
   { text: 'Summarize this trip', subtitle: 'nlq' },
 ];

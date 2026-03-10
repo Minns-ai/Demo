@@ -16,8 +16,7 @@ export default function SetupModal({ onHealthy }: Props) {
 
   // Key inputs
   const [minnsKey, setMinnsKey] = useState('');
-  const [openaiKey, setOpenaiKey] = useState('');
-  const [anthropicKey, setAnthropicKey] = useState('');
+  const [llmKey, setLlmKey] = useState('');
 
   const checkConfig = useCallback(async () => {
     try {
@@ -62,14 +61,31 @@ export default function SetupModal({ onHealthy }: Props) {
     return () => clearInterval(interval);
   }, [checkConfig, checkHealth]);
 
+  const hasLlm = openaiOk || anthropicOk;
+  const needsMinns = !minnsOk;
+  const needsLlm = !hasLlm;
+
+  function detectProvider(key: string): 'anthropic' | 'openai' | null {
+    const k = key.trim();
+    if (k.startsWith('sk-ant-')) return 'anthropic';
+    if (k.startsWith('sk-')) return 'openai';
+    return null;
+  }
+
+  const detectedProvider = detectProvider(llmKey);
+
   async function handleSave() {
     setError('');
-    if (!minnsKey.trim()) {
+    if (needsMinns && !minnsKey.trim()) {
       setError('MINNS API key is required');
       return;
     }
-    if (!openaiKey.trim() && !anthropicKey.trim()) {
-      setError('Enter at least one LLM key (OpenAI or Anthropic)');
+    if (needsLlm && !llmKey.trim()) {
+      setError('Enter an OpenAI or Anthropic API key');
+      return;
+    }
+    if (needsLlm && !detectedProvider) {
+      setError('Could not detect provider — key should start with sk- (OpenAI) or sk-ant- (Anthropic)');
       return;
     }
 
@@ -77,10 +93,10 @@ export default function SetupModal({ onHealthy }: Props) {
     setStatusText('Saving...');
     try {
       const result = await saveKeys({
-        minns_api_key: minnsKey.trim(),
-        openai_api_key: openaiKey.trim() || undefined,
-        anthropic_api_key: anthropicKey.trim() || undefined,
-        llm_provider: anthropicKey.trim() && !openaiKey.trim() ? 'anthropic' : 'openai',
+        minns_api_key: needsMinns ? minnsKey.trim() : '',
+        openai_api_key: detectedProvider === 'openai' ? llmKey.trim() : undefined,
+        anthropic_api_key: detectedProvider === 'anthropic' ? llmKey.trim() : undefined,
+        llm_provider: detectedProvider || 'openai',
       });
 
       setMinnsOk(result.minns_configured);
@@ -126,6 +142,12 @@ export default function SetupModal({ onHealthy }: Props) {
 
   const allConfigured = minnsOk && (openaiOk || anthropicOk);
 
+  const canSave = !saving && (
+    (needsMinns ? !!minnsKey.trim() : true) &&
+    (needsLlm ? !!llmKey.trim() && !!detectedProvider : true) &&
+    (needsMinns || needsLlm)
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 animate-fade-in-up">
@@ -147,58 +169,60 @@ export default function SetupModal({ onHealthy }: Props) {
             <div className="flex items-center gap-2 mb-1.5">
               <StatusIcon ok={minnsOk} />
               <label className="text-sm font-medium text-gray-700">MINNS API Key</label>
+              {minnsOk && <span className="text-[10px] text-emerald-500 font-medium">Configured</span>}
               <a href="https://minns.ai" target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-500 hover:text-brand-600 font-medium ml-auto">
                 Get key &rarr;
               </a>
             </div>
-            <input
-              type="password"
-              value={minnsKey}
-              onChange={e => setMinnsKey(e.target.value)}
-              placeholder="eg_..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all font-mono"
-              disabled={saving}
-            />
+            {minnsOk ? (
+              <div className="w-full bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-sm text-emerald-600 font-mono">
+                ••••••••••••
+              </div>
+            ) : (
+              <input
+                type="password"
+                value={minnsKey}
+                onChange={e => setMinnsKey(e.target.value)}
+                placeholder="eg_..."
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all font-mono"
+                disabled={saving}
+              />
+            )}
           </div>
 
-          {/* OpenAI Key */}
+          {/* LLM Key — auto-detects OpenAI or Anthropic */}
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <StatusIcon ok={openaiOk} />
-              <label className="text-sm font-medium text-gray-700">OpenAI API Key</label>
-              <span className="text-[10px] text-gray-400">or Anthropic below</span>
-              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-500 hover:text-brand-600 font-medium ml-auto">
-                Get key &rarr;
-              </a>
+              <StatusIcon ok={hasLlm ? true : null} />
+              <label className="text-sm font-medium text-gray-700">LLM API Key</label>
+              {hasLlm && (
+                <span className="text-[10px] text-emerald-500 font-medium">
+                  {openaiOk ? 'OpenAI' : 'Anthropic'} configured
+                </span>
+              )}
+              {!hasLlm && detectedProvider && (
+                <span className="text-[10px] text-brand-500 font-medium">
+                  Detected: {detectedProvider === 'anthropic' ? 'Anthropic' : 'OpenAI'}
+                </span>
+              )}
+              {!hasLlm && !detectedProvider && (
+                <span className="text-[10px] text-gray-400">auto-detects provider</span>
+              )}
             </div>
-            <input
-              type="password"
-              value={openaiKey}
-              onChange={e => setOpenaiKey(e.target.value)}
-              placeholder="sk-..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all font-mono"
-              disabled={saving}
-            />
-          </div>
-
-          {/* Anthropic Key */}
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <StatusIcon ok={anthropicOk} />
-              <label className="text-sm font-medium text-gray-700">Anthropic API Key</label>
-              <span className="text-[10px] text-gray-400">optional</span>
-              <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-500 hover:text-brand-600 font-medium ml-auto">
-                Get key &rarr;
-              </a>
-            </div>
-            <input
-              type="password"
-              value={anthropicKey}
-              onChange={e => setAnthropicKey(e.target.value)}
-              placeholder="sk-ant-..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all font-mono"
-              disabled={saving}
-            />
+            {hasLlm ? (
+              <div className="w-full bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-sm text-emerald-600 font-mono">
+                ••••••••••••
+              </div>
+            ) : (
+              <input
+                type="password"
+                value={llmKey}
+                onChange={e => setLlmKey(e.target.value)}
+                placeholder="sk-... or sk-ant-..."
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all font-mono"
+                disabled={saving}
+              />
+            )}
           </div>
         </div>
 
@@ -211,13 +235,24 @@ export default function SetupModal({ onHealthy }: Props) {
 
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saving || !minnsKey.trim() || (!openaiKey.trim() && !anthropicKey.trim())}
-            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors"
-          >
-            {saving ? 'Saving...' : 'Save & Connect'}
-          </button>
+          {!allConfigured && (
+            <button
+              onClick={handleSave}
+              disabled={!canSave}
+              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              {saving ? 'Saving...' : 'Save & Connect'}
+            </button>
+          )}
+          {allConfigured && (
+            <button
+              onClick={handleManualCheck}
+              disabled={checking}
+              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              {checking ? 'Checking...' : 'Check Connection'}
+            </button>
+          )}
           {statusText && (
             <span className={`text-xs ${statusText === 'Connected!' ? 'text-emerald-500 font-medium' : 'text-gray-400'}`}>
               {statusText}
@@ -232,20 +267,9 @@ export default function SetupModal({ onHealthy }: Props) {
             <span className="text-[10px] text-gray-300 uppercase tracking-wider">or</span>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
-          <p className="text-[11px] text-gray-400 text-center mb-2">
-            Edit <code className="text-brand-500 bg-brand-50 px-1 rounded">.env</code> in the project root manually and restart with <code className="text-brand-500 bg-brand-50 px-1 rounded">npm run dev</code>
+          <p className="text-[11px] text-gray-400 text-center">
+            Edit <code className="text-brand-500 bg-brand-50 px-1 rounded">.env</code> in the project root manually — keys are auto-detected every 5s
           </p>
-          {allConfigured && (
-            <div className="flex justify-center">
-              <button
-                onClick={handleManualCheck}
-                disabled={checking}
-                className="text-xs text-brand-500 hover:text-brand-600 font-medium transition-colors"
-              >
-                {checking ? 'Checking...' : 'Check connection'}
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>

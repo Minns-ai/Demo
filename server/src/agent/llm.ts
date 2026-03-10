@@ -36,7 +36,10 @@ export async function chatCompletion(
   messages: ChatMessage[],
   opts: LLMOptions = {}
 ): Promise<string> {
-  const provider = opts.provider ?? config.defaultProvider;
+  const preferredProvider = opts.provider ?? config.defaultProvider;
+  const provider: LLMProvider = preferredProvider === 'anthropic'
+    ? (anthropic ? 'anthropic' : 'openai')
+    : (openai ? 'openai' : 'anthropic');
   const temperature = opts.temperature ?? 0.7;
   const maxTokens = opts.maxTokens ?? 1024;
 

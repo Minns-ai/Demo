@@ -407,7 +407,7 @@ export function getConfigStatus(): Promise<ConfigStatus> {
 }
 
 export interface SaveKeysRequest {
-  minns_api_key: string;
+  minns_api_key?: string;
   openai_api_key?: string;
   anthropic_api_key?: string;
   llm_provider?: 'openai' | 'anthropic';

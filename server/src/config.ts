@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = resolve(__dirname, '../../.env');
+const MANAGED_KEYS = ['MINNS_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'LLM_PROVIDER', 'PORT', 'AGENT_ID', 'SESSION_ID'] as const;
 
 dotenv.config({ path: ENV_PATH });
 
@@ -17,6 +18,62 @@ export const config = {
   agentId: parseInt(process.env.AGENT_ID || '1001', 10),
   sessionId: parseInt(process.env.SESSION_ID || '1', 10),
 };
+
+function clean(value: string | undefined): string {
+  return (value || '').trim();
+}
+
+function readManagedEnv(): Record<string, string> {
+  if (!existsSync(ENV_PATH)) return {};
+  return dotenv.parse(readFileSync(ENV_PATH, 'utf-8'));
+}
+
+/**
+ * Reloads managed config values from .env into in-memory config + process.env.
+ * Returns true if any managed value changed.
+ */
+export function reloadConfigFromEnv(): boolean {
+  const parsed = readManagedEnv();
+
+  const next = {
+    minnsApiKey: clean(parsed.MINNS_API_KEY),
+    openaiApiKey: clean(parsed.OPENAI_API_KEY),
+    anthropicApiKey: clean(parsed.ANTHROPIC_API_KEY),
+    defaultProvider: ((parsed.LLM_PROVIDER || 'openai') as 'openai' | 'anthropic'),
+    port: parseInt(parsed.PORT || '3001', 10),
+    agentId: parseInt(parsed.AGENT_ID || '1001', 10),
+    sessionId: parseInt(parsed.SESSION_ID || '1', 10),
+  };
+
+  const changed =
+    config.minnsApiKey !== next.minnsApiKey ||
+    config.openaiApiKey !== next.openaiApiKey ||
+    config.anthropicApiKey !== next.anthropicApiKey ||
+    config.defaultProvider !== next.defaultProvider ||
+    config.port !== next.port ||
+    config.agentId !== next.agentId ||
+    config.sessionId !== next.sessionId;
+
+  if (!changed) return false;
+
+  config.minnsApiKey = next.minnsApiKey;
+  config.openaiApiKey = next.openaiApiKey;
+  config.anthropicApiKey = next.anthropicApiKey;
+  config.defaultProvider = next.defaultProvider;
+  config.port = next.port;
+  config.agentId = next.agentId;
+  config.sessionId = next.sessionId;
+
+  process.env.MINNS_API_KEY = next.minnsApiKey;
+  process.env.OPENAI_API_KEY = next.openaiApiKey;
+  process.env.ANTHROPIC_API_KEY = next.anthropicApiKey;
+  process.env.LLM_PROVIDER = next.defaultProvider;
+  process.env.PORT = String(next.port);
+  process.env.AGENT_ID = String(next.agentId);
+  process.env.SESSION_ID = String(next.sessionId);
+
+  return true;
+}
 
 /**
  * Updates config in-memory and persists to .env file.
@@ -49,7 +106,7 @@ function writeEnvFile() {
   // Read existing .env to preserve comments and unknown keys
   if (existsSync(ENV_PATH)) {
     const existing = readFileSync(ENV_PATH, 'utf-8');
-    const managed = new Set(['MINNS_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'LLM_PROVIDER', 'PORT', 'AGENT_ID', 'SESSION_ID']);
+    const managed = new Set(MANAGED_KEYS);
 
     for (const line of existing.split('\n')) {
       const trimmed = line.trim();
@@ -60,7 +117,7 @@ function writeEnvFile() {
       }
       // Skip managed keys (we'll re-add them)
       const key = trimmed.split('=')[0]?.trim();
-      if (key && managed.has(key)) continue;
+      if (key && managed.has(key as (typeof MANAGED_KEYS)[number])) continue;
       // Keep unknown keys
       lines.push(line);
     }

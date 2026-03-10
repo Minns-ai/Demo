@@ -93,7 +93,7 @@ export default function SetupModal({ onHealthy }: Props) {
     setStatusText('Saving...');
     try {
       const result = await saveKeys({
-        minns_api_key: needsMinns ? minnsKey.trim() : '',
+        minns_api_key: needsMinns ? minnsKey.trim() : undefined,
         openai_api_key: detectedProvider === 'openai' ? llmKey.trim() : undefined,
         anthropic_api_key: detectedProvider === 'anthropic' ? llmKey.trim() : undefined,
         llm_provider: detectedProvider || 'openai',

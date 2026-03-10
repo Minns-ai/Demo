@@ -2,19 +2,26 @@ import { Router } from 'express';
 import { client, getTelemetryLog, reinitClient } from '../minns/client.js';
 import { reinitLLM } from '../agent/llm.js';
 import { MinnsError } from 'minns-sdk';
-import { config, updateConfig } from '../config.js';
+import { config, reloadConfigFromEnv, updateConfig } from '../config.js';
 
 const router = Router();
 
 function isRealKey(key: string | undefined): boolean {
-  if (!key || key.trim().length === 0) return false;
-  const lower = key.toLowerCase();
-  // Catch any placeholder-style values
-  if (lower.includes('your_') || lower.includes('_here') || lower === 'changeme' || lower === 'xxx') return false;
-  return true;
+  return !!key && key.trim().length > 0;
 }
 
-router.get('/config/status', (_req, res) => {
+router.get('/config/status', async (_req, res) => {
+  try {
+    const changed = reloadConfigFromEnv();
+    if (changed) {
+      await reinitClient();
+      reinitLLM();
+      console.log('[config] Reloaded from .env');
+    }
+  } catch (err) {
+    console.warn('[config] Failed to reload .env for status check:', err);
+  }
+
   const minnsOk = isRealKey(config.minnsApiKey);
   const openaiOk = isRealKey(config.openaiApiKey);
   const anthropicOk = isRealKey(config.anthropicApiKey);
@@ -36,27 +43,31 @@ router.get('/config/status', (_req, res) => {
 router.post('/config/keys', async (req, res) => {
   const { minns_api_key, openai_api_key, anthropic_api_key, llm_provider } = req.body;
 
-  // Validate: need MINNS key + at least one LLM key
-  if (!minns_api_key) {
+  const nextMinnsKey = minns_api_key !== undefined ? minns_api_key : config.minnsApiKey;
+  const nextOpenAIKey = openai_api_key !== undefined ? openai_api_key : config.openaiApiKey;
+  const nextAnthropicKey = anthropic_api_key !== undefined ? anthropic_api_key : config.anthropicApiKey;
+
+  // Validate: need MINNS key + at least one LLM key after merge with existing config
+  if (!nextMinnsKey) {
     res.status(400).json({ error: 'MINNS API key is required' });
     return;
   }
-  if (!openai_api_key && !anthropic_api_key) {
+  if (!nextOpenAIKey && !nextAnthropicKey) {
     res.status(400).json({ error: 'At least one LLM provider key is required (OpenAI or Anthropic)' });
     return;
   }
 
   // Determine provider
   let provider: 'openai' | 'anthropic' = llm_provider || 'openai';
-  if (provider === 'openai' && !openai_api_key) provider = 'anthropic';
-  if (provider === 'anthropic' && !anthropic_api_key) provider = 'openai';
+  if (provider === 'openai' && !nextOpenAIKey) provider = 'anthropic';
+  if (provider === 'anthropic' && !nextAnthropicKey) provider = 'openai';
 
   try {
     // Persist to .env and update in-memory config
     updateConfig({
-      minnsApiKey: minns_api_key,
-      openaiApiKey: openai_api_key || '',
-      anthropicApiKey: anthropic_api_key || '',
+      minnsApiKey: nextMinnsKey,
+      openaiApiKey: nextOpenAIKey,
+      anthropicApiKey: nextAnthropicKey,
       defaultProvider: provider,
     });
 
@@ -68,9 +79,9 @@ router.post('/config/keys', async (req, res) => {
 
     res.json({
       success: true,
-      minns_configured: true,
-      openai_configured: !!openai_api_key,
-      anthropic_configured: !!anthropic_api_key,
+      minns_configured: !!nextMinnsKey,
+      openai_configured: !!nextOpenAIKey,
+      anthropic_configured: !!nextAnthropicKey,
       default_provider: provider,
     });
   } catch (err: any) {

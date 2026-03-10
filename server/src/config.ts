@@ -3,6 +3,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = resolve(__dirname, '../../.env');
 
@@ -17,6 +18,50 @@ export const config = {
   agentId: parseInt(process.env.AGENT_ID || '1001', 10),
   sessionId: parseInt(process.env.SESSION_ID || '1', 10),
 };
+
+
+function clean(value: string | undefined): string {
+  return (value || '').trim();
+}
+
+/**
+ * Reloads managed config values from .env into in-memory config + process.env.
+ * Returns true if any managed value changed.
+ */
+export function reloadConfigFromEnv(): boolean {
+  dotenv.config({ path: ENV_PATH, override: true });
+
+  const next = {
+    minnsApiKey: clean(process.env.MINNS_API_KEY),
+    openaiApiKey: clean(process.env.OPENAI_API_KEY),
+    anthropicApiKey: clean(process.env.ANTHROPIC_API_KEY),
+    defaultProvider: ((process.env.LLM_PROVIDER || 'openai') as 'openai' | 'anthropic'),
+    port: parseInt(process.env.PORT || '3001', 10),
+    agentId: parseInt(process.env.AGENT_ID || '1001', 10),
+    sessionId: parseInt(process.env.SESSION_ID || '1', 10),
+  };
+
+  const changed =
+    config.minnsApiKey !== next.minnsApiKey ||
+    config.openaiApiKey !== next.openaiApiKey ||
+    config.anthropicApiKey !== next.anthropicApiKey ||
+    config.defaultProvider !== next.defaultProvider ||
+    config.port !== next.port ||
+    config.agentId !== next.agentId ||
+    config.sessionId !== next.sessionId;
+
+  if (!changed) return false;
+
+  config.minnsApiKey = next.minnsApiKey;
+  config.openaiApiKey = next.openaiApiKey;
+  config.anthropicApiKey = next.anthropicApiKey;
+  config.defaultProvider = next.defaultProvider;
+  config.port = next.port;
+  config.agentId = next.agentId;
+  config.sessionId = next.sessionId;
+
+  return true;
+}
 
 /**
  * Updates config in-memory and persists to .env file.

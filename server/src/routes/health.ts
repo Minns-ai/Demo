@@ -1,19 +1,80 @@
 import { Router } from 'express';
-import { client, getTelemetryLog } from '../minns/client.js';
+import { client, getTelemetryLog, reinitClient } from '../minns/client.js';
+import { reinitLLM } from '../agent/llm.js';
 import { MinnsError } from 'minns-sdk';
-import { config } from '../config.js';
+import { config, updateConfig } from '../config.js';
 
 const router = Router();
 
-const PLACEHOLDER_KEYS = ['your_minns_api_key_here', 'your_openai_api_key_here'];
+const PLACEHOLDER_KEYS = ['your_minns_api_key_here', 'your_openai_api_key_here', 'your_anthropic_api_key_here'];
+
+function isRealKey(key: string | undefined): boolean {
+  return !!key && !PLACEHOLDER_KEYS.includes(key);
+}
 
 router.get('/config/status', (_req, res) => {
-  const minnsKey = config.minnsApiKey;
-  const openaiKey = config.openaiApiKey;
+  const minnsOk = isRealKey(config.minnsApiKey);
+  const openaiOk = isRealKey(config.openaiApiKey);
+  const anthropicOk = isRealKey(config.anthropicApiKey);
+
   res.json({
-    minns_configured: !!minnsKey && !PLACEHOLDER_KEYS.includes(minnsKey),
-    openai_configured: !!openaiKey && !PLACEHOLDER_KEYS.includes(openaiKey),
+    minns_configured: minnsOk,
+    openai_configured: openaiOk,
+    anthropic_configured: anthropicOk,
+    // Only need MINNS + at least one LLM provider
+    has_llm: openaiOk || anthropicOk,
+    default_provider: config.defaultProvider,
   });
+});
+
+/**
+ * Save API keys from the frontend UI.
+ * Persists to .env and hot-reloads all clients — no restart needed.
+ */
+router.post('/config/keys', async (req, res) => {
+  const { minns_api_key, openai_api_key, anthropic_api_key, llm_provider } = req.body;
+
+  // Validate: need MINNS key + at least one LLM key
+  if (!minns_api_key) {
+    res.status(400).json({ error: 'MINNS API key is required' });
+    return;
+  }
+  if (!openai_api_key && !anthropic_api_key) {
+    res.status(400).json({ error: 'At least one LLM provider key is required (OpenAI or Anthropic)' });
+    return;
+  }
+
+  // Determine provider
+  let provider: 'openai' | 'anthropic' = llm_provider || 'openai';
+  if (provider === 'openai' && !openai_api_key) provider = 'anthropic';
+  if (provider === 'anthropic' && !anthropic_api_key) provider = 'openai';
+
+  try {
+    // Persist to .env and update in-memory config
+    updateConfig({
+      minnsApiKey: minns_api_key,
+      openaiApiKey: openai_api_key || '',
+      anthropicApiKey: anthropic_api_key || '',
+      defaultProvider: provider,
+    });
+
+    // Hot-reload clients
+    await reinitClient();
+    reinitLLM();
+
+    console.log(`[config] Keys updated via UI — provider: ${provider}`);
+
+    res.json({
+      success: true,
+      minns_configured: true,
+      openai_configured: !!openai_api_key,
+      anthropic_configured: !!anthropic_api_key,
+      default_provider: provider,
+    });
+  } catch (err: any) {
+    console.error('[config] Failed to save keys:', err);
+    res.status(500).json({ error: 'Failed to save configuration' });
+  }
 });
 
 router.get('/health', async (_req, res) => {

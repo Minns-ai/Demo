@@ -385,10 +385,35 @@ export function getStats(): Promise<StatsData> {
 export interface ConfigStatus {
   minns_configured: boolean;
   openai_configured: boolean;
+  anthropic_configured: boolean;
+  has_llm: boolean;
+  default_provider: string;
 }
 
 export function getConfigStatus(): Promise<ConfigStatus> {
   return fetchJson('/config/status');
+}
+
+export interface SaveKeysRequest {
+  minns_api_key: string;
+  openai_api_key?: string;
+  anthropic_api_key?: string;
+  llm_provider?: 'openai' | 'anthropic';
+}
+
+export interface SaveKeysResponse {
+  success: boolean;
+  minns_configured: boolean;
+  openai_configured: boolean;
+  anthropic_configured: boolean;
+  default_provider: string;
+}
+
+export function saveKeys(keys: SaveKeysRequest): Promise<SaveKeysResponse> {
+  return fetchJson('/config/keys', {
+    method: 'POST',
+    body: JSON.stringify(keys),
+  });
 }
 
 // ── Telemetry ────────────────────────────────────────────────────

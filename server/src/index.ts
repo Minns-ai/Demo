@@ -40,12 +40,13 @@ app.use('/api', adminRouter);
 
 const server = app.listen(config.port, () => {
   console.log(`\n  ╔══════════════════════════════════════════╗`);
-  console.log(`  ║  minns-sdk Customer Service Agent Demo   ║`);
+  console.log(`  ║           minns-sdk Demo                 ║`);
   console.log(`  ╠══════════════════════════════════════════╣`);
-  console.log(`  ║  Server:  http://localhost:${config.port}          ║`);
-  console.log(`  ║  API Key: ${config.minnsApiKey ? '✓ configured' : '✗ missing'}              ║`);
-  console.log(`  ║  OpenAI:  ${config.openaiApiKey ? '✓ configured' : '✗ missing'}              ║`);
-  console.log(`  ║  Agent:   ${config.agentId} (session ${config.sessionId})          ║`);
+  console.log(`  ║  Server:    http://localhost:${config.port}        ║`);
+  console.log(`  ║  MINNS:     ${config.minnsApiKey ? '✓ configured' : '✗ missing'}            ║`);
+  console.log(`  ║  OpenAI:    ${config.openaiApiKey ? '✓ configured' : '✗ missing'}            ║`);
+  console.log(`  ║  Anthropic: ${config.anthropicApiKey ? '✓ configured' : '✗ missing'}            ║`);
+  console.log(`  ║  Default:   ${config.defaultProvider.padEnd(20)}║`);
   console.log(`  ╚══════════════════════════════════════════╝\n`);
 });
 

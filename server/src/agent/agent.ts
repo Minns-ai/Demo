@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { extractIntentAndResponse } from 'minns-sdk';
 import type { ParsedSidecarIntent, MemoryResponse, StrategyResponse, ClaimSearchResponse } from 'minns-sdk';
 import { config } from '../config.js';
@@ -16,8 +15,7 @@ import { handleComplaints } from '../handlers/complaints.js';
 import { handleAccount } from '../handlers/account.js';
 import { findCustomer } from '../data/customers.js';
 import type { HandlerResult } from '../handlers/order-tracking.js';
-
-const openai = new OpenAI({ apiKey: config.openaiApiKey });
+import { chatCompletion, type LLMProvider } from './llm.js';
 
 const MAX_ITERATIONS = 5;
 
@@ -99,7 +97,8 @@ export function getCustomerTurn(customerId: string): TurnRecord | undefined {
 export async function handleMessage(
   message: string,
   customerId: string = 'CUST-100',
-  sse?: SSEWriter
+  sse?: SSEWriter,
+  provider?: LLMProvider
 ): Promise<string> {
   // If there's already an in-flight turn for this customer, return its queryId
   // so the client can reconnect to it instead of creating a duplicate.
@@ -295,13 +294,7 @@ export async function handleMessage(
 
     let llmOutput: string;
     try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: messagesForLLM,
-        temperature: 0.7,
-        max_tokens: 1024,
-      });
-      llmOutput = completion.choices[0]?.message?.content ?? '';
+      llmOutput = await chatCompletion(messagesForLLM, { provider });
     } catch {
       llmOutput = `THOUGHT: LLM service unavailable.\nFINAL_ANSWER: I'm having a brief technical issue. Please try again in a moment.`;
     }

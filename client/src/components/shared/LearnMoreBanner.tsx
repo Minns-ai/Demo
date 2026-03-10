@@ -90,7 +90,7 @@ export default function LearnMoreBanner({ title, description, sdkMethods, respon
                       <th className={`text-left px-3 py-2 font-medium ${cellMuted}`}>Description</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-surface-4/50">
+                  <tbody className={`divide-y ${light ? 'divide-gray-100' : 'divide-surface-4/50'}`}>
                     {responseFields.map((f, i) => (
                       <tr key={i}>
                         <td className={`px-3 py-1.5 font-mono ${cellText}`}>{f.field}</td>

@@ -37,23 +37,24 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <TourContext.Provider value={{ startTour }}>
-      <div className="flex h-screen overflow-hidden bg-surface-0">
-        {/* Dark icon rail */}
-        <Sidebar onOpenSDKRef={() => setSdkRefOpen(true)} />
-        {/* Content area with padding so white panels float on the dark bg */}
-        <main className="flex-1 overflow-hidden p-3 pl-2">
+      {/* Fixed sidebar — always visible, never affected by content layout */}
+      <Sidebar onOpenSDKRef={() => setSdkRefOpen(true)} />
+
+      {/* Content area — offset by sidebar width */}
+      <div style={{ marginLeft: 64 }} className="h-screen overflow-hidden bg-gray-100">
+        <main className="h-full overflow-hidden p-2">
           {children}
         </main>
-
-        {/* SDK Reference Panel */}
-        <SDKReferencePanel open={sdkRefOpen} onClose={() => setSdkRefOpen(false)} />
-
-        {/* Setup Modal — blocks until healthy */}
-        {showSetup === true && <SetupModal onHealthy={handleHealthy} />}
-
-        {/* Guided Tour */}
-        {showTour && <GuidedTour onClose={() => setShowTour(false)} />}
       </div>
+
+      {/* SDK Reference Panel */}
+      <SDKReferencePanel open={sdkRefOpen} onClose={() => setSdkRefOpen(false)} />
+
+      {/* Setup Modal — blocks until healthy */}
+      {showSetup === true && <SetupModal onHealthy={handleHealthy} />}
+
+      {/* Guided Tour */}
+      {showTour && <GuidedTour onClose={() => setShowTour(false)} />}
     </TourContext.Provider>
   );
 }

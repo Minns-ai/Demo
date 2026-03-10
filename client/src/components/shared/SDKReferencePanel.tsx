@@ -151,7 +151,7 @@ export default function SDKReferencePanel({ open, onClose }: Props) {
       {/* Panel */}
       <div
         className={`fixed top-0 left-16 bottom-0 z-50 w-80 bg-surface-1 border-r border-surface-4 shadow-2xl flex flex-col transition-transform duration-300 ${
-          open ? 'translate-x-0' : '-translate-x-full pointer-events-none'
+          open ? 'translate-x-0' : '-translate-x-[calc(100%+64px)] pointer-events-none'
         }`}
       >
         {/* Header */}

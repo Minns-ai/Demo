@@ -5,7 +5,7 @@ const router = Router();
 
 router.post('/chat', async (req, res) => {
   try {
-    const { message, customerId } = req.body;
+    const { message, customerId, provider } = req.body;
     if (!message || typeof message !== 'string') {
       res.status(400).json({ error: 'message is required' });
       return;
@@ -23,7 +23,7 @@ router.post('/chat', async (req, res) => {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    const queryId = await handleMessage(message, customerId || 'CUST-100', sse);
+    const queryId = await handleMessage(message, customerId || 'CUST-100', sse, provider);
 
     // Send the queryId so the client can reconnect if needed
     res.write(`event: queryId\ndata: ${JSON.stringify({ queryId })}\n\n`);

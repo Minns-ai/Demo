@@ -1,11 +1,11 @@
 type Variant = 'brand' | 'green' | 'amber' | 'red' | 'gray';
 
 const classes: Record<Variant, string> = {
-  brand: 'bg-brand-500/20 text-brand-300',
-  green: 'bg-emerald-500/20 text-emerald-300',
-  amber: 'bg-amber-500/20 text-amber-300',
-  red: 'bg-red-500/20 text-red-300',
-  gray: 'bg-gray-500/20 text-gray-400',
+  brand: 'bg-brand-50 text-brand-600',
+  green: 'bg-emerald-50 text-emerald-600',
+  amber: 'bg-amber-50 text-amber-600',
+  red: 'bg-red-50 text-red-600',
+  gray: 'bg-gray-100 text-gray-500',
 };
 
 export default function Badge({ children, variant = 'brand' }: { children: React.ReactNode; variant?: Variant }) {

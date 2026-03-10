@@ -3,7 +3,7 @@ import Sidebar from './Sidebar';
 import SetupModal from '../shared/SetupModal';
 import GuidedTour from '../shared/GuidedTour';
 import SDKReferencePanel from '../shared/SDKReferencePanel';
-import { getHealth } from '../../api/client';
+import { getHealth, getConfigStatus } from '../../api/client';
 
 // ── Tour Context ────────────────────────────────────────────────────
 interface TourContextType {
@@ -20,11 +20,46 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [showTour, setShowTour] = useState(false);
   const [sdkRefOpen, setSdkRefOpen] = useState(false);
 
-  // Check health on mount
+  // Check health + config on mount
+  // Only show setup if keys are actually missing — not just because server is slow to connect
   useEffect(() => {
-    getHealth()
-      .then(h => setShowSetup(!h.is_healthy))
-      .catch(() => setShowSetup(true));
+    (async () => {
+      try {
+        const health = await getHealth();
+        if (health.is_healthy) {
+          setShowSetup(false);
+          return;
+        }
+      } catch {
+        // Server might not be reachable yet
+      }
+
+      // Health failed — check if keys are configured
+      try {
+        const cfg = await getConfigStatus();
+        // If keys are set, don't block with the modal — server will come up
+        if (cfg.minns_configured && cfg.has_llm) {
+          setShowSetup(false);
+          return;
+        }
+      } catch {
+        // Server not reachable at all — could be starting up
+        // Wait a moment and retry once before showing setup
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const cfg = await getConfigStatus();
+          if (cfg.minns_configured && cfg.has_llm) {
+            setShowSetup(false);
+            return;
+          }
+        } catch {
+          // Still can't reach server
+        }
+      }
+
+      // Keys are missing or server is completely down — show setup
+      setShowSetup(true);
+    })();
   }, []);
 
   const handleHealthy = useCallback(() => {

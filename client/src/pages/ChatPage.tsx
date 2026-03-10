@@ -139,9 +139,10 @@ export default function ChatPage() {
       setMessages(prev => [...prev, agentMsg]);
       setDrawerMsg(agentMsg);
     } catch (err: any) {
+      const errMsg = err?.message || 'Something went wrong';
       setMessages(prev => [...prev, {
         id: `e-${Date.now()}`, role: 'agent',
-        text: `Could not reach MINNS. Is the server running on port 3001?`,
+        text: errMsg,
         timestamp: Date.now(),
       }]);
     } finally {

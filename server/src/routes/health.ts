@@ -6,10 +6,12 @@ import { config, updateConfig } from '../config.js';
 
 const router = Router();
 
-const PLACEHOLDER_KEYS = ['your_minns_api_key_here', 'your_openai_api_key_here', 'your_anthropic_api_key_here'];
-
 function isRealKey(key: string | undefined): boolean {
-  return !!key && !PLACEHOLDER_KEYS.includes(key);
+  if (!key || key.trim().length === 0) return false;
+  const lower = key.toLowerCase();
+  // Catch any placeholder-style values
+  if (lower.includes('your_') || lower.includes('_here') || lower === 'changeme' || lower === 'xxx') return false;
+  return true;
 }
 
 router.get('/config/status', (_req, res) => {

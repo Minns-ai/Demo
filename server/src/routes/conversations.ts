@@ -19,7 +19,10 @@ router.post('/conversations/ingest', async (req, res) => {
     res.json(result);
   } catch (err: unknown) {
     if (err instanceof MinnsError) {
-      res.status(err.statusCode ?? 500).json({ error: err.message, details: err.details });
+      const status = err.statusCode ?? 500;
+      const msg = status === 502 ? 'MINNS API is temporarily unavailable — please try again'
+        : err.message;
+      res.status(status).json({ error: msg, details: err.details });
     } else {
       const message = err instanceof Error ? err.message : 'Failed to ingest conversations';
       console.error('[conversations/ingest]', message);

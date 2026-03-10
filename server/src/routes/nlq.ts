@@ -20,7 +20,10 @@ router.post('/nlq', async (req, res) => {
     res.json(result);
   } catch (err: unknown) {
     if (err instanceof MinnsError) {
-      res.status(err.statusCode ?? 500).json({ error: err.message, details: err.details });
+      const status = err.statusCode ?? 500;
+      const msg = status === 502 ? 'MINNS API is temporarily unavailable — please try again'
+        : err.message;
+      res.status(status).json({ error: msg, details: err.details });
     } else {
       res.status(500).json({ error: 'NLQ query failed' });
     }

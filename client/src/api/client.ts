@@ -7,7 +7,19 @@ async function fetchJson<T>(url: string, opts?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
   });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    // Try to get error message from response body
+    let msg = '';
+    try {
+      const body = await res.json();
+      msg = body.error || body.message || '';
+    } catch { /* no JSON body */ }
+
+    if (res.status === 502) throw new Error(msg || 'MINNS API is temporarily unavailable — please try again');
+    if (res.status === 503) throw new Error(msg || 'Service is starting up — please wait a moment');
+    if (res.status === 504) throw new Error(msg || 'Request timed out — MINNS API may be under load');
+    throw new Error(msg || `Request failed (${res.status})`);
+  }
   return res.json();
 }
 

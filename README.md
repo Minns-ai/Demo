@@ -1,17 +1,86 @@
-# minns-sdk Demo: Customer Service Agent
+# MINNS SDK Demo
 
-A full-stack demo showcasing every major feature of **minns-sdk** through a customer service agent that handles order tracking, returns/refunds, product inquiries, complaints, and account help.
+A full-stack demo showcasing **minns-sdk** — the self-evolving agentic database. Ingest conversations, query with natural language, and search extracted claims — all through 3 core endpoints.
+
+## The 3 Core Endpoints
+
+MINNS exposes three powerful endpoints that turn raw conversations into queryable structured knowledge:
+
+### 1. `ingestConversations()` — Feed it conversations
+
+Ingests raw conversation sessions. MINNS automatically extracts entities, relationships, facts, preferences, and state changes — building a knowledge graph behind the scenes.
+
+```typescript
+import { MinnsClient } from 'minns-sdk';
+
+const client = new MinnsClient({ apiKey: process.env.MINNS_API_KEY });
+
+const result = await client.ingestConversations({
+  case_id: 'travel-booking-sarah-2024',
+  sessions: [{
+    session_id: 'session-1',
+    topic: 'travel-planning',
+    messages: [
+      { role: 'user', content: "I'm planning a trip to the Amalfi Coast for my family." },
+      { role: 'assistant', content: "Lovely! When are you thinking of traveling?" },
+      { role: 'user', content: "Late June. Budget is €5,000. My daughter Lily is allergic to nuts." },
+      // ... more messages
+    ],
+  }],
+});
+
+// result.messages_processed → 16
+// result.relationships_found → 4
+// result.state_changes_found → 2
+```
+
+**What happens under the hood:** MINNS parses each message, classifies it (transaction, state change, relationship, preference, or chitchat), extracts atomic claims, resolves entities, and wires everything into the knowledge graph.
+
+### 2. `nlq()` — Ask questions in plain English
+
+Natural language query over the knowledge graph. Ask anything — MINNS classifies the intent, resolves entities, and returns a human-readable answer.
+
+```typescript
+const answer = await client.nlq("What do you know about this user?");
+
+// answer.answer → "Sarah lives in Manchester with her husband Tom and two children..."
+// answer.intent → "entity_summary"
+// answer.entities_resolved → [{ text: "Sarah", node_type: "Person", confidence: 0.97 }]
+// answer.confidence → 0.94
+// answer.explanation → ["Resolved 'user' to Sarah (Person node)", "Traversed family relationships", ...]
+```
+
+**Supported intents:** `FindNeighbors`, `FindPath`, `FilteredTraversal`, `Subgraph`, `TemporalChain`, `Ranking`, `SimilaritySearch`, `Aggregate`, `StructuredMemoryQuery`.
+
+### 3. `searchClaims()` — Semantic search over extracted facts
+
+Every fact MINNS extracts becomes a searchable claim with confidence scores, evidence spans, and entity links.
+
+```typescript
+const claims = await client.searchClaims({
+  query_text: "dietary requirements",
+  top_k: 5,
+});
+
+// claims[0].claim_text → "Lily is allergic to nuts"
+// claims[0].confidence → 0.95
+// claims[0].subject_entity → "Lily"
+// claims[0].evidence_spans → [{ source_text: "Lily is allergic to nuts, so we need to be careful..." }]
+```
+
+**How it works:** Claims are embedded into a vector space. Queries are matched by cosine similarity, with BM25 keyword boosting for precision.
+
+---
 
 ## Quick Start
 
 ```bash
 # 1. Install dependencies
-cd demo
 npm install
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env with your MINNS_API_KEY and OPENAI_API_KEY
+# Edit .env — add your MINNS_API_KEY and either OPENAI_API_KEY or ANTHROPIC_API_KEY
 
 # 3. Start both servers
 npm run dev
@@ -20,80 +89,44 @@ npm run dev
 - **Frontend**: http://localhost:5173
 - **Backend**: http://localhost:3001
 
+API keys can also be entered through the UI on first launch.
+
 ## Architecture
 
 ```
 demo/
 ├── server/          Express + TypeScript backend
 │   └── src/
-│       ├── minns/   SDK client, intent specs, registry
-│       ├── agent/   Core agent, events, memory, strategy, prompts
-│       ├── handlers/ Domain handlers (orders, returns, products, complaints, account)
-│       ├── routes/  REST API endpoints
+│       ├── minns/   SDK client initialization
+│       ├── agent/   ReAct agent, events, memory, strategy, prompts
+│       ├── routes/  REST API (14 endpoints wrapping SDK methods)
 │       └── data/    Mock databases
 └── client/          React + Vite + Tailwind frontend
     └── src/
-        ├── pages/   6 pages: Chat, Dashboard, Memories, Strategies, Graph, Claims
+        ├── pages/   Chat, Claims, Architecture + 7 more
         ├── components/ Reusable UI components
-        └── api/     Fetch client + React hooks
+        └── api/     API client + React hooks
 ```
 
-## SDK Feature Map
+## Demo Flow
 
-| # | SDK Feature | Where | How |
-|---|------------|-------|-----|
-| 1 | Fluent Event Builder | `agent/events.ts` | All 6 event types: `.action().outcome().state().goal().send()` |
-| 2 | Three-Tier Memory | `agent/memory.ts` → Memories Page | `getAgentMemories()`, `getContextMemories()` by tier |
-| 3 | Strategy System | `agent/strategy.ts` → Strategies Page | `getAgentStrategies()`, `getSimilarStrategies()`, `getActionSuggestions()` |
-| 4 | Semantic Claims | `agent/agent.ts` → Claims Page | `.context(text).send({ enableSemantic: true })`, `searchClaims()` |
-| 5 | Intent Sidecar | `agent/prompts.ts` | `buildSidecarInstruction()` + `extractIntentAndResponse()` |
-| 6 | Intent Registry | `minns/registry.ts` | `registerForGoal()` per domain, `registerAgentFallback()`, `resolve()` |
-| 7 | Graph Analytics | `routes/analytics.ts` → Graph Page | `getAnalytics()`, `getGraph()`, `traverseGraph()` |
-| 8 | Cognitive Events | `agent/events.ts` | `.cognitive('Reasoning', input, output, trace)` per turn |
-| 9 | Communication Events | `agent/events.ts` | `.communication()` for user/agent messages |
-| 10 | Learning Events | `agent/events.ts` | MemoryRetrieved, StrategyServed, Outcome |
-| 11 | Batching | `minns/client.ts` | `autoBatch: true`, `client.flush()` |
-| 12 | Observation Events | Domain handlers | `.observation('order_lookup', data, { confidence, source })` |
-| 13 | Health/Stats | `routes/health.ts` → Dashboard | `healthCheck()`, `getStats()` |
-| 14 | Causality | `agent/agent.ts` | `.causedBy(parentEventId)` linking events |
-| 15 | Goal Tracking | Throughout agent | `.goal(description, priority, progress)` |
-| 16 | Telemetry | `minns/client.ts` | Custom `onTelemetry` callback |
+1. **Ingest** — A pre-loaded travel booking conversation is automatically ingested via `ingestConversations()`
+2. **Query** — Ask natural language questions via `nlq()` — "What's the budget?", "Any dietary needs?", "Summarize this trip"
+3. **Search** — Browse and search extracted claims via `searchClaims()` with confidence scores and evidence
 
-## Pages
-
-- **Chat** — 3-panel layout: Agent Brain (left) | Conversation (center) | Customer Context (right)
-- **Dashboard** — Health status, processing stats, store metrics, learning metrics
-- **Memories** — 3-column Episodic | Semantic | Schema browser
-- **Strategies** — Strategy cards with quality scores and playbook viewer
-- **Graph** — Force-directed graph visualization with analytics
-- **Claims** — Semantic claim search with confidence scores
-
-## Agent Pipeline
-
-Each chat message triggers:
-
-1. **Recall** — Fetch memories + context memories + search claims
-2. **Strategize** — Fetch strategies + similar strategies + action suggestions
-3. **Resolve** — `registry.resolve()` to pick intent spec by detected goal
-4. **Build Prompt** — Inject memories, strategies, claims, sidecar instruction
-5. **LLM Call** — OpenAI chat completion
-6. **Parse Intent** — `extractIntentAndResponse()` from LLM output
-7. **Dispatch** — Route to domain handler
-8. **Emit Events** — Communication, Cognitive, Action, Observation, Context, Learning
-9. **Flush** — `client.flush()` sends all batched events
+The demo shows the full SDK response for every call — intent classification, entity resolution, confidence scores, and execution time.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `MINNS_API_KEY` | Yes | minns-sdk API key |
-| `OPENAI_API_KEY` | Yes | OpenAI API key for LLM calls |
+| `MINNS_API_KEY` | Yes | Get one at [minns.ai](https://minns.ai) |
+| `OPENAI_API_KEY` | One of these | OpenAI key (`sk-...`) |
+| `ANTHROPIC_API_KEY` | One of these | Anthropic key (`sk-ant-...`) |
 | `PORT` | No | Server port (default: 3001) |
-| `AGENT_ID` | No | Agent ID (default: 1001) |
-| `SESSION_ID` | No | Session ID (default: 1) |
 
 ## Tech Stack
 
-- **Backend**: Express, TypeScript, minns-sdk, OpenAI
-- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, react-router-dom
+- **Backend**: Express, TypeScript, minns-sdk, OpenAI / Anthropic
+- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS
 - **Dev**: npm workspaces, concurrently, tsx

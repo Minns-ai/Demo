@@ -36,12 +36,12 @@ const result = await client.ingestConversations({
 
 **What happens under the hood:** MINNS parses each message, classifies it (transaction, state change, relationship, preference, or chitchat), extracts atomic claims, resolves entities, and wires everything into the knowledge graph.
 
-### 2. `nlq()` — Ask questions in plain English
+### 2. `query()` — Ask questions in plain English
 
 Natural language query over the knowledge graph. Ask anything — MINNS classifies the intent, resolves entities, and returns a human-readable answer.
 
 ```typescript
-const answer = await client.nlq("What do you know about this user?");
+const answer = await client.query("What do you know about this user?");
 
 // answer.answer → "Sarah lives in Manchester with her husband Tom and two children..."
 // answer.intent → "entity_summary"
@@ -111,7 +111,7 @@ demo/
 ## Demo Flow
 
 1. **Ingest** — A pre-loaded travel booking conversation is automatically ingested via `ingestConversations()`
-2. **Query** — Ask natural language questions via `nlq()` — "What's the budget?", "Any dietary needs?", "Summarize this trip"
+2. **Query** — Ask natural language questions via `query()` — "What's the budget?", "Any dietary needs?", "Summarize this trip"
 3. **Search** — Browse and search extracted claims via `searchClaims()` with confidence scores and evidence
 
 The demo shows the full SDK response for every call — intent classification, entity resolution, confidence scores, and execution time.

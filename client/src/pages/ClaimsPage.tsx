@@ -3,6 +3,7 @@ import { searchClaims, getClaims, ClaimItem } from '../api/client';
 import Badge from '../components/shared/Badge';
 import ScoreBar from '../components/shared/ScoreBar';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
+import CodeBlock from '../components/shared/CodeBlock';
 import LearnMoreBanner from '../components/shared/LearnMoreBanner';
 
 export default function ClaimsPage() {
@@ -112,15 +113,9 @@ export default function ClaimsPage() {
               <span className="ml-auto text-[10px] font-mono text-emerald-400">{searchTime}ms</span>
             )}
           </div>
-          <pre className="text-[11px] font-mono text-gray-300 leading-relaxed overflow-x-auto">
-{searched
-  ? `await client.searchClaims({
-  queryText: "${query}",
-  topK: 10,
-  minSimilarity: 0.5
-});`
-  : `await client.getClaims({ limit: 50 });`}
-          </pre>
+          <CodeBlock className="!p-3 !rounded-lg" code={searched
+  ? `await client.searchClaims({\n  queryText: "${query}",\n  topK: 10,\n  minSimilarity: 0.5\n});`
+  : `await client.getClaims({ limit: 50 });`} />
         </div>
 
         {loading && <LoadingSpinner />}

@@ -33,7 +33,7 @@ await client.sendMessage({
 });
 
 // 2. Ask questions about the graph
-const answer = await client.nlq("Who owes whom?");
+const answer = await client.query("Who owes whom?");
 // answer.answer, answer.confidence, answer.entities_resolved
 
 // 3. Clean up
@@ -132,10 +132,10 @@ Ask questions about the graph in plain English. The pipeline classifies intent, 
 
 ```typescript
 // Simple string shorthand
-const res = await client.nlq("What are the neighbors of Alice?");
+const res = await client.query("What are the neighbors of Alice?");
 
 // With pagination and conversational follow-ups (up to 5 exchanges)
-const res = await client.nlq({
+const res = await client.query({
   question: "What happened after the login event?",
   limit: 20,
   sessionId: "session-1",
@@ -253,7 +253,7 @@ Event → Graph Construction → Episode Detection → Memory Formation → Stra
 
 **`sendMessage()`** — single message, deferred compaction (real-time/streaming).
 **`ingestConversations()`** — bulk batch, inline compaction.
-**`nlq()`** — query the graph in natural language.
+**`query()`** — query the graph in natural language.
 **Code endpoints** — index source files and reviews into the graph.
 
 Events (below) augment the same graph with explicit structured telemetry.
@@ -613,7 +613,7 @@ try {
 |--------|---------|-------------|
 | `sendMessage(request)` | `MessageResponse` | Send a single message (real-time, deferred compaction). |
 | `ingestConversations(request)` | `ConversationIngestResponse` | Bulk ingest conversations (inline compaction). |
-| `nlq(question)` | `NLQResponse` | Natural language query (string shorthand or full options). |
+| `query(question)` | `NLQResponse` | Natural language query (string shorthand or full options). |
 | `sendCodeFileEvent(request)` | `ProcessEventResponse` | Submit source file for AST analysis + graph ingestion. |
 | `sendCodeReviewEvent(request)` | `ProcessEventResponse` | Submit code review comment/approval/change request. |
 | `searchCode(request?)` | `CodeSearchResponse` | Search code entities by name, kind, language, file path. |

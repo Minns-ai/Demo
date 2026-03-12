@@ -1,4 +1,5 @@
 import LearnMoreBanner from '../components/shared/LearnMoreBanner';
+import CodeBlock from '../components/shared/CodeBlock';
 
 // ── Simplified architecture: 3 core endpoints ────────────────────────
 
@@ -45,18 +46,17 @@ const endpoints: EndpointCard[] = [
   {
     step: 2,
     title: 'Query',
-    subtitle: 'Ask questions about what you know',
+    subtitle: 'Ask questions in plain English',
     method: 'POST',
-    endpoint: '/conversations/query',
-    sdkMethod: 'client.queryConversations()',
-    description: 'Ask natural language questions against ingested data. MINNS classifies the query type (numeric, state, entity_summary, preference, relationship) and routes it to the right resolver. Answers come from structured memory — ledgers, state machines, preference lists, and entity graphs.',
-    code: `const res = await client.queryConversations(
-  "What do I know about Sarah?"
-);
+    endpoint: '/nlq',
+    sdkMethod: 'client.query()',
+    description: 'Ask natural language questions against the knowledge graph. MINNS classifies intent, resolves entities, builds a graph query, and returns a human-readable answer with confidence scores and step-by-step explanation.',
+    code: `const res = await client.query("What do you know about this user?");
 
-// res.answer       => "Sarah lives in Manchester..."
-// res.query_type   => "entity_summary"
-// res.memory_context => { ledgers, states, preferences }`,
+// res.answer            => "Sarah lives in Manchester..."
+// res.intent            => "entity_summary"
+// res.entities_resolved => [{ text: "Sarah", confidence: 0.97 }]
+// res.confidence        => 0.94`,
     color: 'from-violet-500 to-purple-500',
     borderColor: 'border-l-violet-400',
     iconPath: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
@@ -120,9 +120,7 @@ function EndpointSection({ card }: { card: EndpointCard }) {
         </div>
 
         {/* Code example */}
-        <pre className="text-[11px] font-mono text-gray-300 bg-gray-900 rounded-xl p-4 overflow-x-auto leading-relaxed">
-          {card.code}
-        </pre>
+        <CodeBlock code={card.code} />
       </div>
     </div>
   );
@@ -138,7 +136,7 @@ export default function ArchitecturePage() {
           description="MINNS turns conversations into queryable structured memory. Ingest conversations, ask questions, search facts. That's it."
           sdkMethods={[
             { method: 'ingestConversations()', endpoint: 'POST /conversations/ingest', description: 'Feed multi-turn conversations into structured memory' },
-            { method: 'queryConversations()', endpoint: 'POST /conversations/query', description: 'Ask natural language questions against your data' },
+            { method: 'query()', endpoint: 'POST /nlq', description: 'Ask natural language questions against the knowledge graph' },
             { method: 'searchClaims()', endpoint: 'POST /claims/search', description: 'Semantic vector search across extracted facts' },
           ]}
         />
@@ -163,13 +161,9 @@ export default function ArchitecturePage() {
             <div className="w-3 h-3 rounded-full bg-green-500/80" />
             <span className="ml-2 text-[10px] text-gray-500 font-mono">quickstart.ts</span>
           </div>
-          <pre className="text-[12px] font-mono text-gray-300 leading-relaxed overflow-x-auto">
-{`import { createClient } from 'minns-sdk';
+          <CodeBlock className="!p-0 !bg-transparent !rounded-none text-[12px]" code={`import { MinnsClient } from 'minns-sdk';
 
-const client = createClient("your-api-key", {
-  agentId: 2001,
-  sessionId: 100,
-});
+const client = new MinnsClient({ apiKey: "your-api-key" });
 
 // 1. Ingest a conversation
 await client.ingestConversations({
@@ -177,12 +171,11 @@ await client.ingestConversations({
   sessions: [{ session_id: "s1", topic: "trip", messages }],
 });
 
-// 2. Query what you know
-const answer = await client.queryConversations("What's the budget?");
+// 2. Query with natural language
+const answer = await client.query("What's the budget?");
 
 // 3. Search extracted facts
-const claims = await client.searchClaims({ queryText: "allergies" });`}
-          </pre>
+const claims = await client.searchClaims({ queryText: "allergies" });`} />
         </div>
 
         {/* Flow arrows + endpoint cards */}

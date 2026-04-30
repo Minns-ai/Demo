@@ -11,12 +11,7 @@ router.post('/nlq', async (req, res) => {
       res.status(400).json({ error: 'question is required' });
       return;
     }
-    const result = await client.query({
-      question,
-      session_id,
-      limit,
-      offset,
-    });
+    const result = await client.nlq({ question, session_id, limit, offset });
     res.json(result);
   } catch (err: unknown) {
     if (err instanceof MinnsError) {

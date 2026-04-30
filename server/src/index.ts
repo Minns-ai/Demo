@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
 import { destroyClient } from './minns/client.js';
+import { seedWorkspaceData, scheduleLiveUpdate } from './data/workspace-seed.js';
 import chatRouter from './routes/chat.js';
 import memoriesRouter from './routes/memories.js';
 import strategiesRouter from './routes/strategies.js';
@@ -38,16 +39,23 @@ app.use('/api', structuredMemoryRouter);
 app.use('/api', eventsRouter);
 app.use('/api', adminRouter);
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, async () => {
   console.log(`\n  ╔══════════════════════════════════════════╗`);
-  console.log(`  ║           minns-sdk Demo                 ║`);
+  console.log(`  ║        Minns Workspace Demo              ║`);
   console.log(`  ╠══════════════════════════════════════════╣`);
   console.log(`  ║  Server:    http://localhost:${config.port}        ║`);
   console.log(`  ║  MINNS:     ${config.minnsApiKey ? '✓ configured' : '✗ missing'}            ║`);
-  console.log(`  ║  OpenAI:    ${config.openaiApiKey ? '✓ configured' : '✗ missing'}            ║`);
   console.log(`  ║  Anthropic: ${config.anthropicApiKey ? '✓ configured' : '✗ missing'}            ║`);
-  console.log(`  ║  Default:   ${config.defaultProvider.padEnd(20)}║`);
+  console.log(`  ║  OpenAI:    ${config.openaiApiKey ? '✓ configured' : '✗ missing'}            ║`);
   console.log(`  ╚══════════════════════════════════════════╝\n`);
+
+  // Seed workspace data (idempotent — skips if data exists)
+  try {
+    await seedWorkspaceData();
+    scheduleLiveUpdate();
+  } catch (err) {
+    console.warn('[startup] Seed failed (MinnsDB may not be ready):', (err as Error).message);
+  }
 });
 
 // Graceful shutdown — flush pending events and close the server

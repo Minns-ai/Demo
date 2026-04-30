@@ -715,10 +715,22 @@ async function executeAction(
         };
       }
     }
+    case 'query_deals':
+    case 'query_projects':
+    case 'query_team':
+    case 'update_deal':
+    case 'update_project':
+    case 'remember_preference': {
+      const { executeWorkspaceTool } = await import('./workspace-tools.js');
+      const toolResult = await executeWorkspaceTool(action, params);
+      return {
+        response: toolResult.result,
+        data: toolResult.raw ?? { action, result: toolResult.result },
+        observationType: action,
+        success: true,
+      };
+    }
     default: {
-      // Demo mode: any unrecognized action succeeds with its params echoed back.
-      // This lets the agent handle arbitrary requests (place_order, update_delivery, etc.)
-      // without needing a dedicated handler for each one.
       const paramSummary = Object.entries(params)
         .map(([k, v]) => `- **${k}**: ${v}`)
         .join('\n');

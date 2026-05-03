@@ -17,6 +17,7 @@ import nlqRouter from './routes/nlq.js';
 import structuredMemoryRouter from './routes/structured-memory.js';
 import eventsRouter from './routes/events.js';
 import adminRouter from './routes/admin.js';
+import comparisonRouter from './routes/comparison.js';
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/api', nlqRouter);
 app.use('/api', structuredMemoryRouter);
 app.use('/api', eventsRouter);
 app.use('/api', adminRouter);
+app.use('/api', comparisonRouter);
 
 const server = app.listen(config.port, async () => {
   console.log(`\n  ╔══════════════════════════════════════════╗`);

@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import { destroyClient } from './minns/client.js';
 import { seedWorkspaceData, scheduleLiveUpdate } from './data/workspace-seed.js';
@@ -40,6 +42,15 @@ app.use('/api', structuredMemoryRouter);
 app.use('/api', eventsRouter);
 app.use('/api', adminRouter);
 app.use('/api', comparisonRouter);
+
+// Serve built React client in production
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.resolve(__dirname, '../../client/dist');
+app.use(express.static(clientDist));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) return next();
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
 
 const server = app.listen(config.port, async () => {
   console.log(`\n  ╔══════════════════════════════════════════╗`);

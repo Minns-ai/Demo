@@ -2,73 +2,122 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens mirror the remberall marketing site so the demo reads as
+ * part of the same product. HSL values are kept identical to
+ * remberall-agent-memory/src/index.css; consuming them via Tailwind's
+ * `bg-card`, `border-border`, `text-foreground`, etc. (see tailwind.config.js)
+ * means a class written here behaves the same as on the marketing site.
+ */
 @layer base {
+  :root {
+    --background: 220 24% 4%;
+    --foreground: 210 20% 96%;
+
+    --card: 220 16% 11%;
+    --card-foreground: 210 20% 96%;
+
+    --primary: 215 60% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 14%;
+    --secondary-foreground: 210 15% 80%;
+
+    --muted: 220 14% 17%;
+    --muted-foreground: 215 12% 62%;
+
+    --accent: 215 50% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 20% 95%;
+
+    --border: 220 14% 26%;
+    --ring: 215 60% 55%;
+
+    --radius: 0.75rem;
+  }
+
   body {
-    @apply bg-gray-100 text-gray-800 antialiased;
+    @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 
   ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
     @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-200 rounded-full;
+    @apply rounded-full;
+    background-color: hsl(var(--border));
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-300;
+    background-color: hsl(var(--muted-foreground));
   }
 }
 
 @layer components {
-  .card {
-    @apply bg-white border border-gray-100 rounded-xl p-4 transition-all duration-200 shadow-sm overflow-hidden;
+  /*
+   * Card pattern matches remberall: a rounded, bordered, slightly
+   * translucent card with backdrop blur. Use `.panel` for the inner
+   * surface and `.panel-header-dots` for the macOS-window traffic-light
+   * row that decorates the top of "browser-style" comparison panels.
+   */
+  .panel {
+    @apply rounded-xl border bg-card/60 backdrop-blur-sm overflow-hidden;
+    border-color: hsl(var(--border) / 0.6);
   }
-  .card-hover {
-    @apply card hover:border-brand-300/50 hover:shadow-md hover:shadow-brand-500/5;
+
+  .panel-header-dots {
+    @apply flex items-center gap-1.5 px-4 py-2.5 border-b;
+    border-color: hsl(var(--border) / 0.4);
+    background-color: hsl(var(--secondary) / 0.3);
   }
-  .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+
+  /* Subtle inner sub-panel for nested items inside `.panel`. */
+  .subpanel {
+    @apply rounded-lg p-3 border;
+    border-color: hsl(var(--border) / 0.3);
+    background-color: hsl(var(--secondary) / 0.4);
   }
-  .badge-brand {
-    @apply badge bg-brand-50 text-brand-600;
-  }
-  .badge-green {
-    @apply badge bg-emerald-50 text-emerald-600;
-  }
-  .badge-amber {
-    @apply badge bg-amber-50 text-amber-600;
-  }
-  .badge-red {
-    @apply badge bg-red-50 text-red-600;
-  }
+
   .btn-primary {
-    @apply px-4 py-2 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md;
+    @apply px-4 py-2 rounded-lg font-medium text-sm transition-colors;
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
   }
+  .btn-primary:hover {
+    background-color: hsl(var(--primary) / 0.9);
+  }
+  .btn-primary:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
   .btn-secondary {
-    @apply px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-medium transition-colors duration-150 border border-gray-200;
+    @apply px-4 py-2 rounded-lg font-medium text-sm transition-colors border;
+    background-color: hsl(var(--secondary) / 0.6);
+    border-color: hsl(var(--border) / 0.6);
+    color: hsl(var(--secondary-foreground));
   }
+  .btn-secondary:hover {
+    background-color: hsl(var(--secondary));
+  }
+
   .input-field {
-    @apply w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-200;
+    @apply w-full rounded-lg px-4 py-2.5 text-sm transition-colors border;
+    background-color: hsl(var(--secondary) / 0.4);
+    border-color: hsl(var(--border) / 0.6);
+    color: hsl(var(--foreground));
   }
-
-  /* Glass effect - for dark background areas */
-  .glass {
-    @apply bg-surface-1/80 backdrop-blur-md border border-surface-4/50;
+  .input-field::placeholder {
+    color: hsl(var(--muted-foreground));
   }
-
-  /* Panel divider */
-  .panel-divider {
-    @apply border-r border-gray-100;
-  }
-
-  /* Shimmer loading skeleton */
-  .shimmer {
-    background: linear-gradient(90deg, transparent 25%, rgba(99, 102, 241, 0.06) 50%, transparent 75%);
-    background-size: 200% 100%;
-    animation: shimmer 2s linear infinite;
+  .input-field:focus {
+    @apply outline-none;
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
   }
 }

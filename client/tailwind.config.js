@@ -4,7 +4,42 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      // HSL-variable-backed color tokens. The shape mirrors remberall's
+      // Tailwind config so `bg-card`, `text-foreground`, `border-border`
+      // resolve to the same values on this demo and on the marketing
+      // site — the actual values live in src/index.css as CSS variables.
       colors: {
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
+        },
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        border: 'hsl(var(--border))',
+        ring: 'hsl(var(--ring))',
+
+        // Brand palette retained for legacy components that still
+        // reference brand-*. Slowly migrating to the HSL tokens above.
         brand: {
           50: '#eef2ff',
           100: '#e0e7ff',
@@ -25,6 +60,11 @@ export default {
           3: '#23252e',
           4: '#2d303a',
         },
+      },
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
       },
       animation: {
         'fade-in-up': 'fadeInUp 0.3s ease-out forwards',

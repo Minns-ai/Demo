@@ -71,12 +71,22 @@ const server = app.listen(config.port, async () => {
   console.log(`  ║  OpenAI:    ${config.openaiApiKey ? '✓ configured' : '✗ missing'}            ║`);
   console.log(`  ╚══════════════════════════════════════════╝\n`);
 
-  // Seed workspace data (idempotent — skips if data exists)
-  try {
-    await seedWorkspaceData();
-    scheduleLiveUpdate();
-  } catch (err) {
-    console.warn('[startup] Seed failed (MinnsDB may not be ready):', (err as Error).message);
+  // Workspace seeder is intentionally disabled. It was a leftover from the
+  // chat-mode shell and is incompatible with the demo's current purpose
+  // (side-by-side memory-system comparison): the comparison ingests its
+  // own scenarios on demand into a comparison_* case_id, so workspace
+  // history would just pollute the tenant with unrelated data. The seeder
+  // also POSTed to a raw `MINNS_URL` with no auth header, which against
+  // the hosted tenant produced repeated 502s on /api/conversations/ingest
+  // (the control plane's tenant-proxy timeout fired before LLM compaction
+  // completed). Set DEMO_ENABLE_SEED=true to opt back in for local dev.
+  if (process.env.DEMO_ENABLE_SEED === 'true') {
+    try {
+      await seedWorkspaceData();
+      scheduleLiveUpdate();
+    } catch (err) {
+      console.warn('[startup] Seed failed (MinnsDB may not be ready):', (err as Error).message);
+    }
   }
 });
 

@@ -15,15 +15,18 @@
 
 import { Router } from 'express';
 import { Memory } from 'mem0ai/oss';
+import { MinnsClient } from 'minns-sdk';
 import OpenAI from 'openai';
 
 const router = Router();
 
 // MinnsDB is the hosted product — talking to api.minns.ai authenticated by
-// the same MINNS_API_KEY the rest of the demo uses. The previous default
-// (localhost:3333) was a leftover from when this route ran against a local
-// dev instance.
-const MINNS_BASE = process.env.MINNS_URL || 'https://api.minns.ai';
+// the same MINNS_API_KEY the rest of the demo uses. The previous version
+// used raw fetch against `${MINNS_BASE}/api/nlq` etc., which 404'd because
+// nginx on api.minns.ai rewrites `/X` → upstream `/api/X` (so the extra
+// `/api/` we added on the client side became `/api/api/nlq` upstream).
+// Using the SDK avoids the path arithmetic and gives us the correct
+// response shapes for free.
 const MINNS_API_KEY = process.env.MINNS_API_KEY || '';
 
 interface Message { role: string; content: string; }
@@ -42,48 +45,42 @@ interface SystemAnswer {
 async function runMinns(scenario: Scenario, question: string): Promise<string> {
   if (!MINNS_API_KEY) return '(no MINNS_API_KEY configured)';
 
-  const authHeaders = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${MINNS_API_KEY}`,
-  };
+  // Fresh client per run so debug/telemetry buffers don't leak across
+  // comparison turns. The SDK handles auth headers, the api.minns.ai
+  // base URL, the /api path prefix nginx adds, and the typed
+  // NLQResponse shape (data.answer).
+  const client = new MinnsClient({
+    apiKey: MINNS_API_KEY,
+    enableDefaultTelemetry: false,
+    debug: false,
+  });
 
-  // Ingest every session for this scenario. case_id scopes the ingest so
-  // a re-run of the same scenario doesn't bleed into unrelated cases.
-  const sessions = scenario.conversations.map((conv, i) => ({
-    session_id: `${scenario.id}_s${i}`,
-    timestamp: conv.date,
-    topic: conv.session,
-    messages: conv.messages,
-  }));
+  try {
+    const sessions = scenario.conversations.map((conv, i) => ({
+      session_id: `${scenario.id}_s${i}`,
+      timestamp: conv.date,
+      topic: conv.session,
+      messages: conv.messages,
+    }));
 
-  const ingestRes = await fetch(`${MINNS_BASE}/api/conversations/ingest`, {
-    method: 'POST',
-    headers: authHeaders,
-    body: JSON.stringify({
+    await client.ingestConversations({
       case_id: `comparison_${scenario.id}`,
-      sessions,
+      sessions: sessions as any,
       include_assistant_facts: true,
-    }),
-  });
-  if (!ingestRes.ok) {
-    const text = await ingestRes.text().catch(() => '');
-    return `(MinnsDB ingest failed: HTTP ${ingestRes.status} ${text.slice(0, 120)})`;
-  }
+    });
 
-  // Give the pipeline a moment to compact memories before querying.
-  await new Promise((r) => setTimeout(r, 2000));
+    // Give the pipeline a moment to compact memories before querying;
+    // mirrors what runMem0 and runZep do for their own indexers.
+    await new Promise((r) => setTimeout(r, 2000));
 
-  const res = await fetch(`${MINNS_BASE}/api/nlq`, {
-    method: 'POST',
-    headers: authHeaders,
-    body: JSON.stringify({ question }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    return `(MinnsDB query failed: HTTP ${res.status} ${text.slice(0, 120)})`;
+    const nlqRes = await client.nlq(question);
+    return nlqRes.answer || '(no answer)';
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return `(MinnsDB error: ${msg.slice(0, 200)})`;
+  } finally {
+    try { await client.destroy(); } catch { /* ignore */ }
   }
-  const data = await res.json();
-  return data.answer || '(no answer)';
 }
 
 // ── mem0 OSS ───────────────────────────────────────────────────────

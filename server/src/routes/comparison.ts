@@ -1,10 +1,30 @@
+// Side-by-side comparison of memory systems on the same scenario:
+//
+//   • MinnsDB   — our hosted product at api.minns.ai
+//   • mem0      — mem0ai/oss with OpenAI provider, in-memory vector store
+//   • Zep       — Zep Cloud (graph-based memory)
+//   • Vector RAG — naive baseline: OpenAI embeddings + cosine + LLM synth
+//
+// Each system has the same contract: takes a Scenario (multi-session
+// conversation history) plus a question, returns a final string answer.
+// Runs are parallel and per-system failures are isolated so one bad provider
+// doesn't poison the whole comparison.
+//
+// TODO: add Cognee. They don't ship a JS SDK so we'd talk to their cloud
+// HTTP API directly. Tracked but not in this revision.
+
 import { Router } from 'express';
 import { Memory } from 'mem0ai/oss';
 import OpenAI from 'openai';
 
 const router = Router();
 
-const MINNS_BASE = process.env.MINNS_URL || 'http://localhost:3333';
+// MinnsDB is the hosted product — talking to api.minns.ai authenticated by
+// the same MINNS_API_KEY the rest of the demo uses. The previous default
+// (localhost:3333) was a leftover from when this route ran against a local
+// dev instance.
+const MINNS_BASE = process.env.MINNS_URL || 'https://api.minns.ai';
+const MINNS_API_KEY = process.env.MINNS_API_KEY || '';
 
 interface Message { role: string; content: string; }
 interface Session { session: string; date: string; messages: Message[]; }
@@ -20,7 +40,15 @@ interface SystemAnswer {
 // ── MinnsDB ────────────────────────────────────────────────────────
 
 async function runMinns(scenario: Scenario, question: string): Promise<string> {
-  // Ingest all sessions
+  if (!MINNS_API_KEY) return '(no MINNS_API_KEY configured)';
+
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${MINNS_API_KEY}`,
+  };
+
+  // Ingest every session for this scenario. case_id scopes the ingest so
+  // a re-run of the same scenario doesn't bleed into unrelated cases.
   const sessions = scenario.conversations.map((conv, i) => ({
     session_id: `${scenario.id}_s${i}`,
     timestamp: conv.date,
@@ -28,27 +56,32 @@ async function runMinns(scenario: Scenario, question: string): Promise<string> {
     messages: conv.messages,
   }));
 
-  await fetch(`${MINNS_BASE}/api/conversations/ingest`, {
+  const ingestRes = await fetch(`${MINNS_BASE}/api/conversations/ingest`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders,
     body: JSON.stringify({
       case_id: `comparison_${scenario.id}`,
       sessions,
       include_assistant_facts: true,
     }),
   });
+  if (!ingestRes.ok) {
+    const text = await ingestRes.text().catch(() => '');
+    return `(MinnsDB ingest failed: HTTP ${ingestRes.status} ${text.slice(0, 120)})`;
+  }
 
-  // Wait for compaction to finish
-  await new Promise(r => setTimeout(r, 2000));
+  // Give the pipeline a moment to compact memories before querying.
+  await new Promise((r) => setTimeout(r, 2000));
 
-  // Query
   const res = await fetch(`${MINNS_BASE}/api/nlq`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders,
     body: JSON.stringify({ question }),
   });
-
-  if (!res.ok) return '(MinnsDB query failed)';
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return `(MinnsDB query failed: HTTP ${res.status} ${text.slice(0, 120)})`;
+  }
   const data = await res.json();
   return data.answer || '(no answer)';
 }
@@ -75,9 +108,8 @@ async function runMem0(scenario: Scenario, question: string): Promise<string> {
     disableHistory: true,
   });
 
-  // Add all messages
   for (const conv of scenario.conversations) {
-    const messages = conv.messages.map(m => ({
+    const messages = conv.messages.map((m) => ({
       role: m.role,
       content: m.content,
     }));
@@ -88,31 +120,94 @@ async function runMem0(scenario: Scenario, question: string): Promise<string> {
     }
   }
 
-  // Search
   try {
     const results = await mem.search(question, { topK: 10, filters: { user_id: 'demo_user' } });
     const memories = (results as any)?.results || results || [];
-    if (Array.isArray(memories) && memories.length > 0) {
-      const context = memories
-        .map((m: any) => m.memory || m.data?.memory || '')
-        .filter(Boolean)
-        .join('\n');
+    if (!Array.isArray(memories) || memories.length === 0) return '(no memories found)';
 
-      // Use LLM to answer from retrieved memories
-      const openai = new OpenAI({ apiKey });
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        max_tokens: 200,
-        messages: [
-          { role: 'system', content: `Answer the question using ONLY these retrieved memories:\n\n${context}\n\nIf the memories are contradictory, state both facts.` },
-          { role: 'user', content: question },
-        ],
-      });
-      return completion.choices[0]?.message?.content || '(no answer)';
-    }
-    return '(no memories found)';
+    const context = memories
+      .map((m: any) => m.memory || m.data?.memory || '')
+      .filter(Boolean)
+      .join('\n');
+
+    const openai = new OpenAI({ apiKey });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 200,
+      messages: [
+        { role: 'system', content: `Answer the question using ONLY these retrieved memories:\n\n${context}\n\nIf the memories are contradictory, state both facts.` },
+        { role: 'user', content: question },
+      ],
+    });
+    return completion.choices[0]?.message?.content || '(no answer)';
   } catch (e) {
     return `(mem0 search failed: ${(e as Error).message})`;
+  }
+}
+
+// ── Zep Cloud ──────────────────────────────────────────────────────
+
+async function runZep(scenario: Scenario, question: string): Promise<string> {
+  const zepApiKey = process.env.ZEP_API_KEY || '';
+  if (!zepApiKey) return '(no ZEP_API_KEY configured)';
+  const openaiKey = process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || '';
+  if (!openaiKey) return '(no OpenAI key for Zep answer synthesis)';
+
+  // Lazy import so Zep's bundle doesn't load at module-init (and so missing
+  // creds in a non-Zep run don't pay the import cost).
+  const { ZepClient } = await import('@getzep/zep-cloud');
+  const client = new ZepClient({ apiKey: zepApiKey });
+
+  // Fresh user + thread per run so a re-run of the same scenario doesn't
+  // accumulate state in Zep's graph. Best-effort cleanup at the end.
+  const userId = `cmp_${scenario.id}_${Date.now()}`;
+  const threadId = `thr_${userId}`;
+
+  try {
+    try { await (client as any).user.add({ userId, email: `${userId}@example.com` }); } catch { /* idempotent */ }
+    try { await (client as any).thread.create({ threadId, userId }); } catch { /* idempotent */ }
+
+    for (const conv of scenario.conversations) {
+      const messages = conv.messages.map((m) => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content,
+      }));
+      try {
+        await (client as any).thread.addMessages(threadId, { messages });
+      } catch (e) {
+        console.warn('[comparison] Zep addMessages failed:', (e as Error).message);
+      }
+    }
+
+    // Let Zep build the graph; their docs note an eventually-consistent step.
+    await new Promise((r) => setTimeout(r, 2000));
+
+    // Pull the synthesised context Zep computes for this thread.
+    let context = '';
+    try {
+      const userContext = await (client as any).thread.getUserContext(threadId);
+      context = userContext?.context || userContext?.summary?.content || '';
+    } catch (e) {
+      return `(Zep context fetch failed: ${(e as Error).message})`;
+    }
+    if (!context) return '(Zep returned no context)';
+
+    const openai = new OpenAI({ apiKey: openaiKey });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 200,
+      messages: [
+        { role: 'system', content: `Answer the question using ONLY this context from Zep:\n\n${context}` },
+        { role: 'user', content: question },
+      ],
+    });
+    return completion.choices[0]?.message?.content || '(no answer)';
+  } catch (e) {
+    return `(Zep error: ${(e as Error).message})`;
+  } finally {
+    // Cleanup — best effort, never blocks the response. Skipping cleanup is
+    // safe; it just leaves rows in Zep with a timestamped userId.
+    try { await (client as any).user.delete(userId); } catch { /* ignore */ }
   }
 }
 
@@ -124,7 +219,6 @@ async function runVectorRAG(scenario: Scenario, question: string): Promise<strin
 
   const openai = new OpenAI({ apiKey });
 
-  // Chunk conversations into messages
   const chunks: string[] = [];
   for (const conv of scenario.conversations) {
     for (const msg of conv.messages) {
@@ -134,13 +228,11 @@ async function runVectorRAG(scenario: Scenario, question: string): Promise<strin
     }
   }
 
-  // Embed all chunks
   const chunkEmbeddings = await openai.embeddings.create({
     model: 'text-embedding-3-small',
     input: chunks,
   });
 
-  // Embed query
   const queryEmbedding = await openai.embeddings.create({
     model: 'text-embedding-3-small',
     input: question,
@@ -148,7 +240,6 @@ async function runVectorRAG(scenario: Scenario, question: string): Promise<strin
 
   const queryVec = queryEmbedding.data[0].embedding;
 
-  // Cosine similarity
   function cosine(a: number[], b: number[]): number {
     let dot = 0, na = 0, nb = 0;
     for (let i = 0; i < a.length; i++) {
@@ -159,15 +250,13 @@ async function runVectorRAG(scenario: Scenario, question: string): Promise<strin
     return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
   }
 
-  // Rank and take top 5
   const scored = chunks.map((chunk, i) => ({
     chunk,
     score: cosine(queryVec, chunkEmbeddings.data[i].embedding),
   }));
   scored.sort((a, b) => b.score - a.score);
-  const topChunks = scored.slice(0, 5).map(s => s.chunk);
+  const topChunks = scored.slice(0, 5).map((s) => s.chunk);
 
-  // LLM answer from retrieved chunks
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     max_tokens: 200,
@@ -182,42 +271,45 @@ async function runVectorRAG(scenario: Scenario, question: string): Promise<strin
 
 // ── Endpoint ───────────────────────────────────────────────────────
 
+// `systems` (optional) lets the frontend toggle which competitors run. If
+// omitted, every system runs. Per-system failures land as a string answer
+// in the result — never an HTTP 500 — so one provider being down doesn't
+// take the whole comparison with it.
 router.post('/comparison/run', async (req, res) => {
-  const { scenario, question }: { scenario: Scenario; question: string } = req.body;
+  const { scenario, question, systems }: {
+    scenario: Scenario;
+    question: string;
+    systems?: string[];
+  } = req.body;
 
   if (!scenario || !question) {
     res.status(400).json({ error: 'scenario and question required' });
     return;
   }
 
-  const results: SystemAnswer[] = [];
+  const enabled = (name: string) => !systems || systems.length === 0 || systems.includes(name);
 
-  // Run all three in parallel
-  const [minnsResult, mem0Result, ragResult] = await Promise.allSettled([
-    (async () => {
-      const start = Date.now();
-      const answer = await runMinns(scenario, question);
-      return { system: 'MinnsDB', answer, latency_ms: Date.now() - start };
-    })(),
-    (async () => {
-      const start = Date.now();
-      const answer = await runMem0(scenario, question);
-      return { system: 'mem0', answer, latency_ms: Date.now() - start };
-    })(),
-    (async () => {
-      const start = Date.now();
-      const answer = await runVectorRAG(scenario, question);
-      return { system: 'Vector RAG', answer, latency_ms: Date.now() - start };
-    })(),
-  ]);
-
-  for (const r of [minnsResult, mem0Result, ragResult]) {
-    if (r.status === 'fulfilled') {
-      results.push(r.value);
-    } else {
-      results.push({ system: '?', answer: `Error: ${r.reason}`, latency_ms: 0 });
+  const runs: Array<{ system: string; promise: Promise<SystemAnswer> }> = [];
+  const timed = async (system: string, fn: () => Promise<string>): Promise<SystemAnswer> => {
+    const start = Date.now();
+    try {
+      const answer = await fn();
+      return { system, answer, latency_ms: Date.now() - start };
+    } catch (e) {
+      return { system, answer: `(error: ${(e as Error).message})`, latency_ms: Date.now() - start };
     }
-  }
+  };
+
+  if (enabled('MinnsDB')) runs.push({ system: 'MinnsDB', promise: timed('MinnsDB', () => runMinns(scenario, question)) });
+  if (enabled('mem0')) runs.push({ system: 'mem0', promise: timed('mem0', () => runMem0(scenario, question)) });
+  if (enabled('Zep')) runs.push({ system: 'Zep', promise: timed('Zep', () => runZep(scenario, question)) });
+  if (enabled('Vector RAG')) runs.push({ system: 'Vector RAG', promise: timed('Vector RAG', () => runVectorRAG(scenario, question)) });
+
+  const settled = await Promise.allSettled(runs.map((r) => r.promise));
+  const results: SystemAnswer[] = settled.map((s, i) => {
+    if (s.status === 'fulfilled') return s.value;
+    return { system: runs[i].system, answer: `(unhandled error: ${s.reason})`, latency_ms: 0 };
+  });
 
   res.json({ results });
 });

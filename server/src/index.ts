@@ -19,7 +19,6 @@ import nlqRouter from './routes/nlq.js';
 import structuredMemoryRouter from './routes/structured-memory.js';
 import eventsRouter from './routes/events.js';
 import adminRouter from './routes/admin.js';
-import comparisonRouter from './routes/comparison.js';
 
 const app = express();
 
@@ -41,6 +40,16 @@ app.use('/api', nlqRouter);
 app.use('/api', structuredMemoryRouter);
 app.use('/api', eventsRouter);
 app.use('/api', adminRouter);
+
+// Comparison route — the demo's main feature. Side-by-side memory-system
+// answers (MinnsDB vs mem0 vs Zep vs naive RAG) on a shared scenario.
+// Previously gated behind ENABLE_COMPARISON because mem0ai's barrel import
+// crashed on a missing `ollama` package and `runMinns` only knew how to
+// reach a local MinnsDB at localhost:3333. Both fixed in comparison.ts and
+// package.json (ollama installed as a resolver-satisfying ghost dep; the
+// MinnsDB call now authenticates against hosted api.minns.ai). The gate is
+// no longer needed — the route is always mounted.
+import comparisonRouter from './routes/comparison.js';
 app.use('/api', comparisonRouter);
 
 // Serve built React client in production

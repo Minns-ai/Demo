@@ -118,9 +118,28 @@ const SCENARIOS: Scenario[] = [
       ]},
     ],
     questions: [
+      // ── Core: surface a superseded fact + reason about state vs event ──
       { question: 'Which pet did the user get first?', expected: 'Luna the cat (March 2025).',  why: 'Temporal ordering across sessions.' },
       { question: 'Does the user currently have a cat?', expected: 'No — Luna passed away.',     why: 'State update: "passed away" invalidates the older fact.' },
       { question: 'How many pets does the user have?', expected: '1 — Max the dog.',             why: 'Combine temporal reasoning with state tracking.' },
+
+      // ── Multilingual: same first-pet question in 4 other languages. ──
+      // The NLQ planner's temporal_intent classification is multilingual
+      // by construction — the LLM picks "first" semantics from the
+      // question's meaning, not from English keyword matches. If any of
+      // these fail, the prompt's cross-lingual examples need another
+      // anchor.
+      { question: 'Quel animal a-t-il adopté en premier ?',  expected: 'Luna le chat (mars 2025).', why: 'French — same "first" intent. Tests cross-lingual classification.' },
+      { question: '他最早领养的宠物是什么？',                expected: '是猫 Luna（2025年3月）。', why: 'Chinese — same "first" intent. Tests cross-lingual classification.' },
+      { question: '¿Qué mascota adoptó primero?',          expected: 'Luna la gata (marzo de 2025).', why: 'Spanish — same "first" intent. Tests cross-lingual classification.' },
+      { question: 'Welches Haustier hatte er zuerst?',     expected: 'Luna die Katze (März 2025).',  why: 'German — same "first" intent. Tests cross-lingual classification.' },
+
+      // ── Harder multi-turn: requires composing facts across all three
+      // sessions, not just retrieving one. Vector-RAG baselines tend to
+      // pick the most-recent fact and miss the order. ──
+      { question: 'List the pets in chronological order with adoption dates.',           expected: 'Luna (cat, March 2025), then Max (dog, May 2025). Luna passed away August 2025.', why: 'Full temporal ordering: include superseded facts AND ordering by valid_from.' },
+      { question: 'How long did the user have Luna before Max joined the household?',    expected: 'About 2.5 months — Luna adopted March 1, Max May 15.',                            why: 'Duration arithmetic across two event facts. Requires both adoption dates.' },
+      { question: 'Did the user have any pets in April 2025?',                            expected: 'Yes — Luna the cat (Max joined in May).',                                          why: 'Point-in-time query: was Luna alive AND adopted by April? Pure AS OF reasoning.' },
     ],
   },
   {
@@ -140,6 +159,62 @@ const SCENARIOS: Scenario[] = [
     questions: [
       { question: "What is the user's dietary preference?",       expected: 'Pescatarian.',                  why: 'Single-valued preference supersession.' },
       { question: 'Can I recommend a sushi restaurant?',          expected: 'Yes — the user eats fish now.', why: 'Apply the updated preference, not the historical one.' },
+    ],
+  },
+  {
+    id: 'life-timeline',
+    title: 'A life timeline',
+    description: 'Six sessions across 18 months. Two cities, two jobs, two pets, a habit that depends on where the user lived, and a milestone that explicitly closes one of those states. The questions stress first / last / used-to / "while I lived there" across multiple entities at once.',
+    conversations: [
+      { session: 'New job in Berlin', date: '2024-01-10', messages: [
+        { role: 'user',      content: "Started today at Stripe in Berlin. Senior engineer on the payments team. Subletting in Kreuzberg until I find something permanent." },
+        { role: 'assistant', content: "Congrats on the Stripe move and the Kreuzberg start." },
+        { role: 'user',      content: "I'm planning to go to the Pergamon Museum every Saturday — it's a five-minute walk from the sublet." },
+        { role: 'assistant', content: "Noted: weekly Pergamon habit while you're in Kreuzberg." },
+      ]},
+      { session: 'Adopted Mochi', date: '2024-03-05', messages: [
+        { role: 'user',      content: "Adopted a cat from the Berlin shelter today. Named her Mochi. The flat finally feels like home." },
+        { role: 'assistant', content: "Welcome Mochi to the Kreuzberg life." },
+      ]},
+      { session: 'Promotion', date: '2024-07-22', messages: [
+        { role: 'user',      content: "Got promoted to Staff Engineer at Stripe. Same team, more scope on the payments platform." },
+        { role: 'assistant', content: "Big step up. Same team, broader scope — noted." },
+        { role: 'user',      content: "Quick aside: still doing the Pergamon Saturday thing — that's seven months running." },
+        { role: 'assistant', content: "Habit holding steady at seven months." },
+      ]},
+      { session: 'Moving to Amsterdam', date: '2024-09-12', messages: [
+        { role: 'user',      content: "Big news — Stripe is moving me to the Amsterdam office. Found a place in Jordaan. Mochi comes with." },
+        { role: 'assistant', content: "Stripe Amsterdam, Jordaan, Mochi makes the trip — got it." },
+        { role: 'user',      content: "Starting Dutch lessons this week. The Pergamon thing obviously ends — I'll find a new Saturday routine here." },
+        { role: 'assistant', content: "Dutch lessons begin; Pergamon Saturday closes with the move." },
+      ]},
+      { session: 'Adopted Pretzel', date: '2024-12-04', messages: [
+        { role: 'user',      content: "Mochi seemed lonely so we adopted a second cat — Pretzel. Two cats now." },
+        { role: 'assistant', content: "Two-cat household: Mochi and Pretzel." },
+      ]},
+      { session: 'Switching to Spotify', date: '2025-04-30', messages: [
+        { role: 'user',      content: "Leaving Stripe — joining Spotify in Stockholm next month as a Principal. Moving the household with both cats." },
+        { role: 'assistant', content: "Spotify Stockholm, Principal, two cats. Big chapter close." },
+        { role: 'user',      content: "Sad note: Mochi passed away two weeks ago. Pretzel's been clingy since." },
+        { role: 'assistant', content: "So sorry about Mochi. Pretzel will lean on you for a while." },
+      ]},
+    ],
+    questions: [
+      // ── First / last across multiple entities ──
+      { question: 'Where did the user live first?',                                    expected: 'Berlin (Kreuzberg), starting January 2024.',                              why: 'TemporalFrame=First over the location predicate. Three cities exist in history; the answer is the earliest valid_from.' },
+      { question: 'What was the user\'s first pet?',                                    expected: 'Mochi the cat, adopted March 2024 in Berlin.',                            why: 'TemporalFrame=First over adoption events. Mochi predates Pretzel by nine months.' },
+      { question: 'What was the user\'s last role at Stripe?',                          expected: 'Staff Engineer (after the July 2024 promotion, before leaving for Spotify).', why: 'TemporalFrame=Last on Stripe-scoped employment state — the most-recent role at Stripe, NOT the current role (which is Principal at Spotify).' },
+
+      // ── Cascade dependency: weekend habit was location-bound ──
+      { question: 'Does the user still go to the Pergamon Museum on Saturdays?',       expected: 'No — that was the Berlin habit, ended when they moved to Amsterdam.',     why: 'Cascade: visits depends on lives_in:Berlin. When location supersedes, the habit closes too. Tests cascade invalidation against current state.' },
+      { question: 'How many Pergamon visits would the user have made roughly?',         expected: 'Around 35-40 — weekly for about 8 months between January and September 2024.', why: 'Multi-step: anchor the habit to its valid window (Berlin period) and apply a weekly cadence.' },
+
+      // ── Multi-pet current state vs history ──
+      { question: 'How many cats does the user have now?',                              expected: '1 — Pretzel. Mochi passed away in April 2025.',                          why: 'Current state requires honoring the "passed away" supersession on Mochi while keeping Pretzel active.' },
+      { question: 'Has the user ever lived in Stockholm before this year?',            expected: 'No — Stockholm is the most recent move (May 2025), prior cities were Berlin and Amsterdam.', why: 'Historical query over location: enumerate prior values, exclude the current one.' },
+
+      // ── Chain across multiple entities ──
+      { question: 'Trace the user\'s pets and where they were adopted from.',           expected: 'Mochi from the Berlin shelter (March 2024), Pretzel adopted in Amsterdam (December 2024). Mochi passed away April 2025; Pretzel moved with the user to Stockholm.', why: 'Cross-entity reasoning: pets + locations + lifecycle events ordered chronologically.' },
     ],
   },
   {

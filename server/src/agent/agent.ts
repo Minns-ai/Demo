@@ -16,6 +16,7 @@ import { handleAccount } from '../handlers/account.js';
 import { findCustomer } from '../data/customers.js';
 import type { HandlerResult } from '../handlers/order-tracking.js';
 import { chatCompletion, type LLMProvider } from './llm.js';
+import { withSpan, closeRollout, recordEval, optoEnabled } from '../otel/opto.js';
 
 const MAX_ITERATIONS = 5;
 
@@ -112,6 +113,7 @@ export async function handleMessage(
   }
 
   const queryId = `q-${Date.now()}`;
+  const rolloutId = queryId; // opto: groups this turn's spans into one trajectory
   const eventsEmitted: string[] = [];
 
   // Register the turn
@@ -147,13 +149,15 @@ export async function handleMessage(
   const ctx = buildEventContext({ customerId, lastMessage: message }, activeGoal);
 
   // Use recallContext() for parallel fault-tolerant recall of memories, strategies, claims
-  const recall = await client.recallContext({
-    agentId: config.agentId,
-    context: ctx,
-    claimsQuery: customerId,
-    memoryLimit: 10,
-    strategyLimit: 5,
-  });
+  const recall = await withSpan('recall', rolloutId, {}, () =>
+    client.recallContext({
+      agentId: config.agentId,
+      context: ctx,
+      claimsQuery: customerId,
+      memoryLimit: 10,
+      strategyLimit: 5,
+    }),
+  );
 
   let topMemories = rankMemories(Array.isArray(recall.memories) ? recall.memories : [], 5);
   let activeStrategies = rankStrategies(Array.isArray(recall.strategies) ? recall.strategies : [], 3);
@@ -294,7 +298,9 @@ export async function handleMessage(
 
     let llmOutput: string;
     try {
-      llmOutput = await chatCompletion(messagesForLLM, { provider });
+      llmOutput = await withSpan('llm.think', rolloutId, { 'llm.iteration': iteration }, () =>
+        chatCompletion(messagesForLLM, { provider }),
+      );
     } catch {
       llmOutput = `THOUGHT: LLM service unavailable.\nFINAL_ANSWER: I'm having a brief technical issue. Please try again in a moment.`;
     }
@@ -353,7 +359,9 @@ export async function handleMessage(
     });
 
     // ── Phase 2: ACT ──────────────────────────────────────────────
-    const handlerResult = await executeAction(action, actionInput, customerId);
+    const handlerResult = await withSpan(`tool.${action}`, rolloutId, {}, () =>
+      executeAction(action, actionInput, customerId),
+    );
     lastHandlerResult = handlerResult;
 
     sendStep({ type: 'act', action, result: handlerResult.data ?? handlerResult.response, success: handlerResult.success });
@@ -542,6 +550,27 @@ export async function handleMessage(
   turn.completedAt = Date.now();
 
   sse?.('done', {});
+
+  // ── Opto: close the rollout + attach a grounded eval ──────────────
+  // The spans emitted above cluster into a workflow on close; the eval
+  // grounds this turn's reward in the MinnsDB outcome for that workflow.
+  if (optoEnabled()) {
+    const reward = finalAnswer
+      ? lastHandlerResult?.success === false
+        ? 0.4
+        : 0.9
+      : 0.1;
+    const closed = await closeRollout(rolloutId);
+    if (closed) {
+      await recordEval(closed.trajectory_id, {
+        reward,
+        outcomeSource: 'implicit',
+        outcomeRef: `minnsdb://outcome/${queryId}`,
+        notes: goalDesc ?? activeGoal ?? 'turn',
+      });
+    }
+  }
+
   return queryId;
 }
 

@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './config.js';
+import { initOpto } from './otel/opto.js';
 import { destroyClient } from './minns/client.js';
 import { seedWorkspaceData, scheduleLiveUpdate } from './data/workspace-seed.js';
 import chatRouter from './routes/chat.js';
@@ -70,6 +71,8 @@ const server = app.listen(config.port, async () => {
   console.log(`  ║  Anthropic: ${config.anthropicApiKey ? '✓ configured' : '✗ missing'}            ║`);
   console.log(`  ║  OpenAI:    ${config.openaiApiKey ? '✓ configured' : '✗ missing'}            ║`);
   console.log(`  ╚══════════════════════════════════════════╝\n`);
+
+  initOpto();
 
   // Workspace seeder is intentionally disabled. It was a leftover from the
   // chat-mode shell and is incompatible with the demo's current purpose

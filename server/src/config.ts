@@ -17,6 +17,11 @@ export const config = {
   defaultProvider: (process.env.LLM_PROVIDER || 'openai') as 'openai' | 'anthropic',
   agentId: parseInt(process.env.AGENT_ID || '1001', 10),
   sessionId: parseInt(process.env.SESSION_ID || '1', 10),
+  // Optimisation service: when both are set, each agent turn emits OTLP
+  // spans and a grounded eval so the optimiser can discover the workflow.
+  optoUrl: (process.env.OPTO_URL || '').replace(/\/$/, ''),
+  optoApiKey: process.env.OPTO_API_KEY || '',
+  optoAgentName: process.env.OPTO_AGENT_NAME || 'shopify-support',
 };
 
 

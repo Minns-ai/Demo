@@ -16,7 +16,7 @@ import {
 } from '@opentelemetry/api';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { Resource } from '@opentelemetry/resources';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { config } from '../config.js';
 
@@ -37,10 +37,12 @@ export function initOpto(): void {
     url: `${config.optoUrl}/v1/traces`,
     headers: { Authorization: `Bearer ${config.optoApiKey}` },
   });
+  // OpenTelemetry 2.x: the resource comes from resourceFromAttributes and span
+  // processors are passed in, since addSpanProcessor no longer exists.
   provider = new NodeTracerProvider({
-    resource: new Resource({ 'service.name': config.optoAgentName }),
+    resource: resourceFromAttributes({ 'service.name': config.optoAgentName }),
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
-  provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
   provider.register();
   console.log(`[opto] telemetry on -> ${config.optoUrl}`);
 }

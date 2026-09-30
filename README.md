@@ -93,7 +93,7 @@ npm run dev
 - **Frontend**: http://localhost:5173
 - **Backend**: http://localhost:3001
 
-You need Node.js 20 or later. The `.env` file must sit in the repository root, next to `package.json`; the server reads it from there.
+You need Node.js 20.19 or later (or 22.12 or later), which is what Vite 8 requires. The `.env` file must sit in the repository root, next to `package.json`; the server reads it from there.
 
 If you start without keys, the server still runs and the frontend shows a setup dialog where you can enter your MINNS key and an LLM key. The dialog saves them to `.env`. The MinnsDB column of the comparison reads `MINNS_API_KEY` once when the server starts, so restart `npm run dev` after entering keys through the dialog.
 
